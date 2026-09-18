@@ -30,8 +30,8 @@ Bot de Discord para reproducir música desde YouTube, YouTube Music y Spotify.
 
 ```bash
 # Clonar el repositorio
-git clone https://github.com/tu-usuario/CubitoMusic.git
-cd CubitoMusic
+git clone https://github.com/LAPEORRA/cubitosmusic_dbot.git
+cd cubitosmusic_dbot
 
 # Instalar dependencias
 npm install
@@ -92,7 +92,7 @@ npm run deploy-commands
 ## Estructura del Proyecto
 
 ```
-CubitoMusic/
+cubitosmusic_dbot/
 ├── src/
 │   ├── index.ts              # Bootstrap del cliente
 │   ├── deploy-commands.ts    # Registro de comandos
@@ -114,7 +114,6 @@ CubitoMusic/
 ├── Politicas-PrivacidadCM.md
 ├── AGENTS.md
 ├── package.json
-├── tsconfig.json
 └── .env.example
 ```
 
