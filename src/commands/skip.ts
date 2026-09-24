@@ -1,26 +1,19 @@
 import { SlashCommandBuilder } from 'discord.js';
-import { createAudioPlayer, AudioPlayerStatus } from '@discordjs/voice';
+import { skipTrack, requireVoiceChannel, getQueue } from '../player/controls.js';
 
 export const data = new SlashCommandBuilder()
   .setName('skip')
   .setDescription('Siguiente pista');
 
-export async function execute(interaction) {
-  await interaction.deferReply({ ephemeral: false });
-
-  const player = (interaction.client as any).player;
-
-  if (!player) {
-    return interaction.editReply({ content: '❌ Player no inicializado.', ephemeral: true });
+export async function skip(interaction: any) {
+  if (!requireVoiceChannel(interaction)) {
+    return interaction.reply({ content: '❌ Necesitas estar en un canal de voz.', flags: 64 });
   }
 
-  try {
-    player.skip();
-    await interaction.editReply({ content: '⏭️ Pista saltada.', ephemeral: false });
-  } catch (error) {
-    console.error('❌ Error al saltar pista:', error);
-    await interaction.editReply({ content: '❌ Error al saltar la pista.', ephemeral: true });
+  const queue = getQueue(interaction);
+  if (!queue || !skipTrack(queue)) {
+    return interaction.reply({ content: '❌ No hay nada reproduciéndose.', flags: 64 });
   }
+
+  await interaction.reply({ content: '⏭️ Pista saltada.', flags: 64 });
 }
-
-export default { data, execute };

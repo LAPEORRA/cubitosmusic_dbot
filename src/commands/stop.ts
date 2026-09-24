@@ -1,33 +1,23 @@
 import { SlashCommandBuilder } from 'discord.js';
+import { stopQueue, requireVoiceChannel, getQueue } from '../player/controls.js';
+import { updateEmptyPanel } from '../player/panel.js';
 
 export const data = new SlashCommandBuilder()
   .setName('stop')
   .setDescription('Detiene la música y desconecta');
 
-export async function execute(interaction) {
-  await interaction.deferReply({ ephemeral: false });
-
-  const voiceChannel = interaction.member?.voice.channel;
-  const player = (interaction.client as any).player;
-
-  if (!voiceChannel) {
-    return interaction.editReply({ content: '❌ No estás en un canal de voz.', ephemeral: true });
+export async function stop(interaction: any) {
+  if (!requireVoiceChannel(interaction)) {
+    return interaction.reply({ content: '❌ Necesitas estar en un canal de voz.', flags: 64 });
   }
 
-  try {
-    // Detener el player y limpiar la cola
-    if (player) {
-      player.stop();
-    }
-
-    // Desconectar del canal de voz
-    await voiceChannel.leave();
-
-    await interaction.editReply({ content: '⏹️ Música detenida y bot desconectado.', ephemeral: false });
-  } catch (error) {
-    console.error('❌ Error al detener música:', error);
-    await interaction.editReply({ content: '❌ Error al detener la música.', ephemeral: true });
+  const queue = getQueue(interaction);
+  if (!queue) {
+    return interaction.reply({ content: '❌ No hay nada reproduciéndose.', flags: 64 });
   }
+
+  await stopQueue(queue);
+  const channel = (queue.metadata as any)?.channel as any;
+  await updateEmptyPanel(channel);
+  await interaction.reply({ content: '⏹️ Música detenida y bot desconectado.', flags: 64 });
 }
-
-export default { data, execute };

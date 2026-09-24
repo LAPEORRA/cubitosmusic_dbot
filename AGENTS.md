@@ -9,7 +9,7 @@ Funciones: slash commands, reproducción de audio desde Spotify, YouTube Music y
 - Discord: discord.js v14
 - Voz: @discordjs/voice
 - Motor de música: discord-player v6+ con extractors
-- Extractors: @discord-player/extractor, @discord-player/spotify, @discord-player/youtube
+- Extractors: @discord-player/extractor, discord-player-youtubedlp (yt-dlp + youtubei.js)
 - Codificación de audio: sodium-native (preferido) o @discordjs/opusscript
 - Procesamiento de audio: ffmpeg (ffmpeg-static o instalación del sistema)
 
@@ -49,9 +49,20 @@ src/
 
 ## Configuración de discord-player (ruta crítica)
 1. Crear instancia de Player desde discord-player
-2. Registrar extractors: YouTubeExtractor, SpotifyExtractor, etc.
+2. Registrar extractors: YouTubeDlpExtractor (yt-dlp + youtubei.js), DefaultExtractors, etc.
 3. En /play: extraer query, player.play(channel, query) detecta la fuente automáticamente
 4. Player usa @discordjs/voice para la conexión de voz automáticamente
+
+## Notas sobre YouTube y yt-dlp
+- El extractor de YouTube es `YouTubeDlpExtractor` (paquete `discord-player-youtubedlp`), no el core de discord-player
+- Requiere binario yt-dlp (lo provee `ytdlp-nodejs` en postinstall) y ffmpeg (ffmpeg-static)
+- `agent: { autoCookiesFromBrowser: false }` debe estar SIEMPRE para evitar que intente leer el perfil de Chrome
+- El binario se localiza automáticamente; usar `setFFmpegPath`/`setYtDlpPath` solo si hay problemas
+- Playlists (PL, OLAK de YT Music) resuelven cada track individual y se encolan
+- Radio mixes (list=RD*/RDMM/RDEM/RDAMVM, p.ej. RDGM...) se resuelven como PLAYLIST:
+  se usa `YouTubeDlpMixExtractor` (src/player/youtubeDlpMix.ts), una subclase de
+  YouTubeDlpExtractor que fuerza `resolvePlaylist` en vez de video único.
+- Cookie opcional: `agent.cookies` al registrarse en index.ts (no usar YOUTUBE_COOKIE de .env)
 
 ## Gotchas de ESM
 - package.json debe tener `"type": "module"`
@@ -64,6 +75,14 @@ src/
 - sodium-native es más rápido que opusscript pero requiere build nativo
 - @discordjs/voice AudioPlayer necesita recurso de audio de discord-player
 - El bot debe estar en el mismo canal de voz que el usuario para reproducir
+
+## Gotchas del filtro ffmpeg con YouTubeDlpExtractor (CRÍTICO)
+- **NO usar `queue.filters.ffmpeg.setFilters(...)`** (p.ej. `normalizer2`) con este extractor:
+  el stream viene en `$fmt: 'raw'` (PCM) y el FFmpegFilterer lo re-codifica lanzando su propio
+  ffmpeg, que muere inmediatamente → `write EPIPE` → la pista se corta y la cola se vacía.
+- La anti-saturación se maneja SOLO con `nodeOptions.volume` (p.ej. `volume: 70`), sin filtros.
+- `setFilters` re-elige la pista en reproducción (`triggerReplay`), así que ni siquiera debe
+  llamarse desde `playerStart` aun con extractores que sí soportan el filterer.
 
 ## Notas sobre fuentes de música
 - YouTube: funciona directo con el extractor de YouTube

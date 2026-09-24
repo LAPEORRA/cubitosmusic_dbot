@@ -8,12 +8,18 @@ dist/
 .env
 .env.local
 .env.*.local
+*.env
+*.env.*
 
 # Logs
 *.log
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
+
+# Sesiones de agente (opencode) y artefactos locales
+session-*.md
+.opencode/
 
 # Runtime data
 pids/

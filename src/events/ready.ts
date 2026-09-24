@@ -1,37 +1,63 @@
-import { Client, Events } from 'discord.js';
-import { useMainPlayer } from 'discord-player';
+import { Client } from 'discord.js';
+import { Player } from 'discord-player';
+import { buildPanelEmbed, buildPanelRows, updatePanel, setStartedAt, getStartedAt, updateEmptyPanel } from '../player/panel.js';
 
-export const ready = async (client: Client) => {
+export const ready = async (client: Client, player: Player) => {
   console.log(`✅ Bot listo como: ${client.user?.tag}`);
 
-  // Obtener el player principal - discord-player lo crea automáticamente
-  const player = useMainPlayer();
-
   // Registrar eventos del player
-  player.on('play', (queue, track) => {
-    console.log(`🎵 Tocando: ${track.title} en ${queue.channel.name}`);
+  player.events.on('playerStart', (queue, track) => {
+    console.log(`🎵 Tocando: ${track.title} en ${queue.channel?.name}`);
+
+    const channel = (queue.metadata as any)?.channel as any;
+    if (!channel) return;
+
+    setStartedAt(queue.guild.id, new Date());
+    const embed = buildPanelEmbed(track, queue, getStartedAt(queue.guild.id), (queue.metadata as any)?.requestedBy?.username);
+    const rows = buildPanelRows(queue.node.isPaused());
+    void updatePanel(channel, embed, rows);
   });
 
-  player.on('error', (queue, error) => {
+  player.events.on('playerPause', (queue) => {
+    const channel = (queue.metadata as any)?.channel as any;
+    const current = queue.currentTrack;
+    if (!channel || !current) return;
+    const embed = buildPanelEmbed(current, queue, getStartedAt(queue.guild.id), (queue.metadata as any)?.requestedBy?.username);
+    const rows = buildPanelRows(true);
+    void updatePanel(channel, embed, rows);
+  });
+
+  player.events.on('playerResume', (queue) => {
+    const channel = (queue.metadata as any)?.channel as any;
+    const current = queue.currentTrack;
+    if (!channel || !current) return;
+    const embed = buildPanelEmbed(current, queue, getStartedAt(queue.guild.id), (queue.metadata as any)?.requestedBy?.username);
+    const rows = buildPanelRows(false);
+    void updatePanel(channel, embed, rows);
+  });
+
+  player.events.on('emptyQueue', (queue) => {
+    console.log('📭 Cola vacía, desconectando...');
+    const channel = (queue.metadata as any)?.channel as any;
+    void updateEmptyPanel(channel);
+  });
+
+  player.events.on('queueDelete', (queue) => {
+    console.log('🗑 Cola eliminada');
+  });
+
+  player.events.on('error', (queue, error) => {
     console.error('❌ Error en el player:', error);
   });
 
-  player.on('empty', (queue) => {
-    console.log('📭 Cola vacía, desconectando...');
+  player.events.on('playerError', (queue, error) => {
+    console.error('❌ Error de reproducción:', error);
   });
 
-  // Sincronizar comandos de slash en el servidor de desarrollo
   try {
-    const guild = await client.guilds.fetch(process.env.GUILD_ID);
-    const application = await client.application?.fetch();
-
-    if (guild && application) {
-      const commands = application.commands;
-      console.log(`📝 Comandos disponibles en guild ${guild.name}`);
-    }
+    const guild = await client.guilds.fetch(process.env.GUILD_ID!);
+    console.log(`📝 Bot activo en guild: ${guild.name}`);
   } catch (error) {
-    console.error('❌ Error sincronizando comandos:', error);
+    console.error('❌ Error:', error);
   }
 };
-
-export default { ready };

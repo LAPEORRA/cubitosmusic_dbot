@@ -1,30 +1,20 @@
-import { SlashCommandBuilder } from 'discord.js';
+import { SlashCommandBuilder, GuildMember } from 'discord.js';
+import { togglePause, requireVoiceChannel, getQueue } from '../player/controls.js';
 
 export const data = new SlashCommandBuilder()
   .setName('pause')
   .setDescription('Pausa o reanuda la reproducción');
 
-export async function execute(interaction) {
-  await interaction.deferReply({ ephemeral: false });
-
-  const player = (interaction.client as any).player;
-
-  if (!player) {
-    return interaction.editReply({ content: '❌ Player no inicializado.', ephemeral: true });
+export async function pause(interaction: any) {
+  if (!requireVoiceChannel(interaction)) {
+    return interaction.reply({ content: '❌ Necesitas estar en un canal de voz.', flags: 64 });
   }
 
-  try {
-    if (player.paused) {
-      player.pause();
-      await interaction.editReply({ content: '▶️ Reproducción reanudada.', ephemeral: false });
-    } else {
-      player.pause(true);
-      await interaction.editReply({ content: '⏸️ Reproducción pausada.', ephemeral: false });
-    }
-  } catch (error) {
-    console.error('❌ Error al pausar/reanudar:', error);
-    await interaction.editReply({ content: '❌ Error al controlar la reproducción.', ephemeral: true });
+  const queue = getQueue(interaction);
+  if (!queue || (!queue.isPlaying() && !queue.node.isPaused())) {
+    return interaction.reply({ content: '❌ No hay nada reproduciéndose.', flags: 64 });
   }
+
+  const nowPaused = togglePause(queue);
+  await interaction.reply({ content: nowPaused ? '⏸️ Reproducción pausada.' : '▶️ Reproducción reanudada.', flags: 64 });
 }
-
-export default { data, execute };
