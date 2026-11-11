@@ -64,7 +64,7 @@ En la máxima medida permitida por la ley:
 
 - El Bot puede recopilar datos de uso para mejorar el servicio
 - No compartimos datos personales con terceros, excepto cuando sea requerido por ley
-- Consulta nuestra [Política de Privacidad](Politicas-PrivacidadCM.md) para más detalles
+- Consulta nuestra [Política de Privacidad](privacy.md) para más detalles
 
 ---
 

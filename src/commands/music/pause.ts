@@ -1,5 +1,5 @@
-import { SlashCommandBuilder, GuildMember } from 'discord.js';
-import { togglePause, requireVoiceChannel, getQueue } from '../player/controls.js';
+import { SlashCommandBuilder } from 'discord.js';
+import { togglePause, requireVoiceChannel, requireSameVoiceChannel, getQueue } from '../../player/controls.js';
 
 export const data = new SlashCommandBuilder()
   .setName('pause')
@@ -13,6 +13,10 @@ export async function pause(interaction: any) {
   const queue = getQueue(interaction);
   if (!queue || (!queue.isPlaying() && !queue.node.isPaused())) {
     return interaction.reply({ content: '❌ No hay nada reproduciéndose.', flags: 64 });
+  }
+
+  if (!requireSameVoiceChannel(interaction, queue)) {
+    return interaction.reply({ content: '❌ Debes estar en el mismo canal de voz que el bot.', flags: 64 });
   }
 
   const nowPaused = togglePause(queue);

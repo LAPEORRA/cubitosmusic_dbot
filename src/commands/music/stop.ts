@@ -1,6 +1,6 @@
 import { SlashCommandBuilder } from 'discord.js';
-import { stopQueue, requireVoiceChannel, getQueue } from '../player/controls.js';
-import { updateEmptyPanel } from '../player/panel.js';
+import { stopQueue, requireVoiceChannel, requireSameVoiceChannel, getQueue } from '../../player/controls.js';
+import { updateEmptyPanel } from '../../player/panel/panel.js';
 
 export const data = new SlashCommandBuilder()
   .setName('stop')
@@ -14,6 +14,10 @@ export async function stop(interaction: any) {
   const queue = getQueue(interaction);
   if (!queue) {
     return interaction.reply({ content: '❌ No hay nada reproduciéndose.', flags: 64 });
+  }
+
+  if (!requireSameVoiceChannel(interaction, queue)) {
+    return interaction.reply({ content: '❌ Debes estar en el mismo canal de voz que el bot.', flags: 64 });
   }
 
   await stopQueue(queue);

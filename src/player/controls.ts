@@ -15,6 +15,17 @@ export function requireVoiceChannel(interaction: InteractionLike) {
   return getMemberVoiceChannel(interaction) !== null;
 }
 
+export function isSameVoiceChannel(
+  memberChannelId: string | null | undefined,
+  botChannelId: string | null | undefined,
+): boolean {
+  return Boolean(memberChannelId && botChannelId && memberChannelId === botChannelId);
+}
+
+export function requireSameVoiceChannel(interaction: InteractionLike, queue: GuildQueue): boolean {
+  return isSameVoiceChannel(interaction.member?.voice?.channelId, queue.channel?.id);
+}
+
 export function getQueue(interaction: InteractionLike): GuildQueue | null {
   return useQueue(interaction.guildId);
 }

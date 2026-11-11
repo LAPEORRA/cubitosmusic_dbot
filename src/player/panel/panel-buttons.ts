@@ -5,7 +5,8 @@ import {
   stopQueue,
   togglePause,
   requireVoiceChannel,
-} from './controls.js';
+  requireSameVoiceChannel,
+} from '../controls.js';
 import {
   buildPanelEmbed,
   buildPanelRows,
@@ -13,6 +14,7 @@ import {
   updatePanel,
   updateEmptyPanel,
 } from './panel.js';
+import { buildQueueReply } from '../queueSummary.js';
 
 export async function handlePanelButton(interaction: any) {
   const customId = interaction.customId as string;
@@ -24,6 +26,14 @@ export async function handlePanelButton(interaction: any) {
   const queue = useQueue(interaction.guildId);
   if (!queue || !queue.currentTrack) {
     return interaction.reply({ content: '❌ No hay reproducción activa.', flags: 64, ephemeral: true });
+  }
+
+  if (customId !== 'panel_queue' && !requireSameVoiceChannel(interaction, queue)) {
+    return interaction.reply({
+      content: '❌ Debes estar en el mismo canal de voz que el bot.',
+      flags: 64,
+      ephemeral: true,
+    });
   }
 
   await interaction.deferUpdate();
@@ -52,7 +62,11 @@ export async function handlePanelButton(interaction: any) {
       return;
     }
     case 'panel_queue': {
-      return interaction.followUp({ content: buildQueueSummary(queue), flags: 64, ephemeral: true });
+      return interaction.followUp({
+        ...buildQueueReply(queue.currentTrack, queue.tracks.data),
+        flags: 64,
+        ephemeral: true,
+      });
     }
     default:
       return;
@@ -65,19 +79,4 @@ export async function handlePanelButton(interaction: any) {
     const rows = buildPanelRows(queue.node.isPaused());
     await updatePanel(channel, embed, rows);
   }
-}
-
-function buildQueueSummary(queue: any): string {
-  const tracks = queue.tracks.data;
-  const current = queue.currentTrack;
-  const list = tracks
-    .slice(0, 10)
-    .map((t: any, i: number) => `${i + 1}. **${t.title}** — ${t.author}`)
-    .join('\n');
-
-  const parts: string[] = [];
-  if (current) parts.push(`🎵 **Ahora:** ${current.title}`);
-  parts.push(`📋 **Cola (${tracks.length}):** ${list || 'vacía'}`);
-  if (tracks.length > 10) parts.push(`... y ${tracks.length - 10} más`);
-  return parts.join('\n');
 }

@@ -1,132 +1,121 @@
 # CubitoMusic 🎵
 
-Bot de Discord para reproducir música desde YouTube, YouTube Music y Spotify.
+Bot de música para Discord, pensado para un servidor privado: reproduce desde **YouTube, YouTube Music, Spotify y SoundCloud** con panel interactivo, cola de reproducción y logs de reproducción correlacionados.
+
+![Node.js](https://img.shields.io/badge/node-%3E%3D22-brightgreen)
+![TypeScript](https://img.shields.io/badge/TypeScript-strict-3178c6)
+![discord.js](https://img.shields.io/badge/discord.js-14-5865f2)
+![License](https://img.shields.io/badge/license-MIT-blue)
 
 ## Características
 
-- Reproducir música desde **YouTube**, **YouTube Music** y **Spotify**
-- Comandos slash modernos (`/play`, `/skip`, `/stop`, `/queue`, `/pause`)
-- Gestión de cola de reproducción
-- Calidad de audio optimizada
-- Fácil configuración
+- Reproducción vía **yt-dlp** (`discord-player-youtubedlp`) con soporte de playlists y **radio mixes** de YouTube (`list=RD*`).
+- Búsqueda por texto o URL en YouTube, YouTube Music, Spotify y SoundCloud.
+- Panel interactivo con botones (anterior, pausa, saltar, detener, ver cola) y progreso en vivo.
+- Cola por servidor, loop de pista, shuffle y control de volumen base.
+- Todas las respuestas en **español** y efímeras (`flags: 64`).
+- Logs JSON de reproducción con `playbackSessionId` para depurar.
+- Registro de comandos centralizado y tipado (`src/commands/index.ts`).
 
 ## Comandos
 
 | Comando | Descripción |
 |---------|-------------|
-| `/play <url\|búsqueda>` | Reproduce música desde YouTube, Spotify o URL |
-| `/skip` | Siguiente pista |
-| `/stop` | Detiene la música y desconecta |
+| `/play <url\|búsqueda>` | Reproduce una canción, playlist o búsqueda |
+| `/skip` | Salta a la siguiente pista |
+| `/stop` | Detiene la reproducción y limpia la cola |
 | `/queue` | Muestra la cola de reproducción |
 | `/pause` | Pausa o reanuda la reproducción |
+| `/loop` | Activa o desactiva la repetición de la pista |
+| `/shuffle` | Mezcla el orden de la cola |
+| `/nowplaying` | Muestra la canción actual |
+
+Mientras hay reproducción, el bot mantiene un panel con botones equivalentes en el canal de texto.
 
 ## Requisitos
 
-- Node.js 20+
-- Cuenta en [Discord Developer Portal](https://discord.com/developers/applications)
-- Token del bot de Discord
+- **Node.js 22+** (desarrollo verificado con Node 26).
+- Una aplicación en el [Discord Developer Portal](https://discord.com/developers/applications) con un bot.
+- No hacen falta intents privilegiados: solo `Guilds` y `GuildVoiceStates`.
 
 ## Instalación
 
 ```bash
-# Clonar el repositorio
 git clone https://github.com/LAPEORRA/cubitosmusic_dbot.git
 cd cubitosmusic_dbot
-
-# Instalar dependencias
-npm install
-
-# Configurar variables de entorno
-cp .env.example .env
-# Editar .env con tus credenciales
+npm ci
+cp .env.example .env   # en Windows: copy .env.example .env
 ```
 
-## Configuración
-
-1. Crear una aplicación en [Discord Developer Portal](https://discord.com/developers/applications)
-2. Crear un bot y copiar el token
-3. Activar los Privileged Gateway Intents:
-   - Server Members Intent
-   - Message Content Intent
-4. Configurar URLs de Condiciones del Servicio y Política de Privacidad
-5. Generar URL de invitación con permisos de voz
-6. Invitar el bot a tu servidor
-7. Ejecutar `npm run deploy-commands` para registrar comandos
-8. Ejecutar `npm run dev` para iniciar el bot
-
-## Variables de Entorno
+Edita `.env` con tus credenciales:
 
 ```env
 DISCORD_TOKEN=tu_token_del_bot
 CLIENT_ID=tu_client_id
 GUILD_ID=tu_guild_id
 
-# Opcional - para Spotify
+# Opcional (mejora la resolución de Spotify)
 SPOTIFY_CLIENT_ID=tu_client_id_spotify
 SPOTIFY_CLIENT_SECRET=tu_client_secret_spotify
 ```
 
-## Desarrollo
+Registra los comandos y arranca:
 
 ```bash
-# Modo desarrollo con hot reload
-npm run dev
-
-# Compilar para producción
-npm run build
-
-# Ejecutar en producción
-npm start
-
-# Registrar comandos slash
-npm run deploy-commands
+npm run deploy-commands   # registro en la guild de GUILD_ID (instantáneo)
+npm run dev               # desarrollo con tsx
 ```
 
-## Tecnologías
+## Scripts
 
-- [Discord.js](https://discord.js.org/) - Framework de Discord para Node.js
-- [discord-player](https://discord-player.js.org/) - Framework de música para Discord
-- [TypeScript](https://www.typescriptlang.org/) - JavaScript con tipos
-- [ESM](https://nodejs.org/api/esm.html) - ES Modules
+| Script | Qué hace |
+|--------|----------|
+| `npm run dev` | Arranca con `tsx` (sin auto-reload; usa `npx tsx watch src/index.ts` si lo quieres) |
+| `npm run build` | Compila a `dist/` con `tsc` |
+| `npm start` | Ejecuta `node dist/index.js` |
+| `npm test` | Pruebas de regresión con `node:test` + `tsx` |
+| `npm run typecheck` | Comprueba tipos de `src/` y de `tests/` + `scripts/` |
+| `npm run deploy-commands` | Registra los slash commands en la guild |
+| `npm run deploy-commands -- --global` | Registra los comandos globalmente (tarda hasta 1 h) |
 
-## Estructura del Proyecto
+## Estructura
 
 ```
-cubitosmusic_dbot/
 ├── src/
-│   ├── index.ts              # Bootstrap del cliente
-│   ├── deploy-commands.ts    # Registro de comandos
-│   ├── commands/             # Comandos slash
-│   │   ├── play.ts
-│   │   ├── skip.ts
-│   │   ├── stop.ts
-│   │   ├── queue.ts
-│   │   └── pause.ts
-│   ├── events/               # Eventos de Discord
-│   │   ├── ready.ts
-│   │   └── interactionCreate.ts
-│   ├── player/               # Configuración del player
-│   │   └── setup.ts
-│   └── types/                # Tipos compartidos
-│       └── index.ts
-├── Setup_CubitoMusic.md      # Guía de instalación
-├── Condiciones_ServiciosCM.md
-├── Politicas-PrivacidadCM.md
-├── AGENTS.md
-├── package.json
-└── .env.example
+│   ├── index.ts              # Bootstrap: client, Player, extractores, login
+│   ├── config.ts             # Validación tipada de variables de entorno
+│   ├── commands/
+│   │   ├── index.ts          # Registro tipado (router + deploy)
+│   │   └── music/            # /play, /skip, /stop, /queue, /pause, /loop, /shuffle, /nowplaying
+│   ├── events/               # ready, interactionCreate, interactionResponses
+│   ├── player/
+│   │   ├── extractors/       # YouTubeDlpMixExtractor (radio mixes)
+│   │   ├── panel/            # Panel interactivo y botones
+│   │   ├── controls.ts       # Helpers de control y validación de voz
+│   │   ├── queueSummary.ts   # Formato de cola compartido
+│   │   ├── url.ts            # normalizeUrl (testeado)
+│   │   └── audioPreset.ts    # Preset de compresor DSP
+│   └── types/                # Contratos compartidos
+├── tests/                    # Pruebas (commands, events, player)
+├── scripts/                  # deploy-commands.ts
+├── docs/                     # Arquitectura, setup y páginas legales
+├── .github/                  # CI, plantillas de issue/PR
+└── AGENTS.md                 # Contexto para agentes/IA
 ```
+
+## Documentación
+
+- [Arquitectura y gotchas](docs/ARCHITECTURE.md) — **léelo antes de tocar reproducción**.
+- [Guía de instalación paso a paso](docs/SETUP.md).
+- [Cómo contribuir](CONTRIBUTING.md).
+- Legal: [Condiciones del Servicio](docs/legal/terms.html) · [Política de Privacidad](docs/legal/privacy.html).
+
+> Las URLs `privacy.html` y `terms.html` de la raíz son stubs de compatibilidad que redirigen a `docs/legal/`. Se mantienen porque están registradas en el Discord Developer Portal.
+
+## Restricción importante
+
+La ruta de reproducción está **congelada**: no se debe cambiar `play.ts` (salvo textos), la resolución de radio mixes, el orden/opciones de los extractores, ni usar filtros ffmpeg (`setFilters` provoca `write EPIPE`). Detalles en [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
 
 ## Licencia
 
-MIT
-
-## Soporte
-
-- [Discord Developer Portal](https://discord.com/developers/applications)
-- [Discord.js Documentation](https://discord.js.org/)
-- [discord-player Documentation](https://discord-player.js.org/)
-
----
-
-Desarrollado con ❤️ para la comunidad de Discord
+MIT — ver [LICENSE](LICENSE).

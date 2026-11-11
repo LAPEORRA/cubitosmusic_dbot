@@ -1,19 +1,41 @@
 {
-  "name": "proyectos_opencode",
-  "version": "1.0.0",
-  "description": "",
-  "main": "index.js",
+  "name": "cubitosmusic",
+  "version": "1.1.0",
+  "description": "Bot de música para Discord: yt-dlp, panel interactivo, cola por servidor y logs de reproducción.",
+  "private": true,
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "engines": {
+    "node": ">=22.0.0"
+  },
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1",
     "dev": "tsx src/index.ts",
     "build": "tsc",
     "start": "node dist/index.js",
-    "deploy-commands": "tsx deploy-commands.ts"
+    "test": "tsx --test",
+    "typecheck": "tsc --noEmit && tsc -p tsconfig.test.json",
+    "clean": "node -e \"require('node:fs').rmSync('dist', { recursive: true, force: true })\"",
+    "deploy-commands": "tsx scripts/deploy-commands.ts"
   },
-  "keywords": [],
-  "author": "",
-  "license": "ISC",
-  "type": "module",
+  "keywords": [
+    "discord",
+    "discord-bot",
+    "music",
+    "discord-player",
+    "yt-dlp",
+    "typescript"
+  ],
+  "author": "LAPEORRA",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/LAPEORRA/cubitosmusic_dbot.git"
+  },
+  "bugs": {
+    "url": "https://github.com/LAPEORRA/cubitosmusic_dbot/issues"
+  },
+  "homepage": "https://github.com/LAPEORRA/cubitosmusic_dbot#readme",
   "dependencies": {
     "@discord-player/extractor": "^7.2.0",
     "@discordjs/voice": "^0.19.2",
@@ -27,6 +49,9 @@
     "tsx": "^4.23.15"
   },
   "allowScripts": {
+    "esbuild@0.27.7": true,
+    "esbuild@0.28.2": true,
+    "ffmpeg-static@5.3.0": true,
     "ytdlp-nodejs@3.4.5": true
   }
 }

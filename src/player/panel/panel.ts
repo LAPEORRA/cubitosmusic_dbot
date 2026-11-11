@@ -93,9 +93,13 @@ export function buildPanelRows(isPaused: boolean) {
 function withPanelLock(guildId: string, task: () => Promise<void>) {
   const prev = panelLocks.get(guildId) ?? Promise.resolve();
   const next = prev
-    .catch(() => {})
+    .catch((error) => {
+      console.error(`❌ Error en actualización previa del panel de guild ${guildId}:`, error);
+    })
     .then(task)
-    .catch(() => {});
+    .catch((error) => {
+      console.error(`❌ Error actualizando el panel de guild ${guildId}:`, error);
+    });
   panelLocks.set(guildId, next);
   return next;
 }
@@ -137,26 +141,29 @@ export async function updateEmptyPanel(channel: any) {
   if (!channel) return;
 
   const guildId = channel.guildId;
-  const existing = getPanelMessage(guildId);
-  if (!existing) return;
+  return withPanelLock(guildId, async () => {
+    const existing = getPanelMessage(guildId);
+    if (!existing) return;
 
-  const disabledRows = existing.components
-    .filter(row => row.type === ComponentType.ActionRow)
-    .map(row =>
-      new ActionRowBuilder<ButtonBuilder>().addComponents(
-        row.components.map(c => ButtonBuilder.from(c as any).setDisabled(true))
-      )
-    );
+    const disabledRows = existing.components
+      .filter(row => row.type === ComponentType.ActionRow)
+      .map(row =>
+        new ActionRowBuilder<ButtonBuilder>().addComponents(
+          row.components.map(c => ButtonBuilder.from(c as any).setDisabled(true))
+        )
+      );
 
-  try {
-    await existing.edit({
-      embeds: [new EmbedBuilder()
-        .setColor(0x5865f2)
-        .setDescription('📭 **Cola vacía** — la reproducción terminó.')
-        .setFooter({ text: 'CubitoMusic' })],
-      components: disabledRows,
-    });
-  } catch {
-    deletePanelMessage(guildId);
-  }
+    try {
+      await existing.edit({
+        embeds: [new EmbedBuilder()
+          .setColor(0x5865f2)
+          .setDescription('📭 **Cola vacía** — la reproducción terminó.')
+          .setFooter({ text: 'CubitoMusic' })],
+        components: disabledRows,
+      });
+    } catch (error) {
+      deletePanelMessage(guildId);
+      console.error('❌ Error actualizando el panel de cola vacía:', error);
+    }
+  });
 }

@@ -1,4 +1,4 @@
-# Informe Técnico - CubitoMusic Bot
+# Arquitectura - CubitoMusic Bot
 
 > **Propósito de este documento**: servir de guía completa para un agente futuro
 > (humano o IA) que deba mantener, extender o corregir este bot. Describe arquitectura,
@@ -11,7 +11,7 @@
 - **Guild de desarrollo:** Cubitos Dubidu (ID: `1016533561295245332`)
 - **Repositorio:** https://github.com/LAPEORRA/cubitosmusic_dbot (rama `main`)
 - **Tag estable:** `v1.1.0` (reproducción yt-dlp + radio mixes + panel interactivo)
-- **GitHub Pages (legal):** https://lapeorra.github.io/cubitosmusic_dbot/ (`terms.html` / `privacy.html`)
+- **GitHub Pages (legal):** https://lapeorra.github.io/cubitosmusic_dbot/ (`terms.html` / `privacy.html`, stubs que redirigen a `docs/legal/`)
 
 ### Funcionalidad verificada ✅
 | Función | Estado |
@@ -32,7 +32,7 @@
 
 ## Stack Técnico
 
-- **Runtime:** Node.js 20+ (desarrollo actual: Node 24)
+- **Runtime:** Node.js 22+ (requisito del extractor `discord-player-youtubedlp`; desarrollo actual: Node 24)
 - **Lenguaje:** TypeScript estricto + ESM (`"type": "module"`)
 - **Discord:** discord.js v14 (`^14.27.0`)
 - **Motor de música:** discord-player v7 (`^7.2.0`)
@@ -40,7 +40,7 @@
 - **Extractores:**
   - `@discord-player/extractor` (`^7.2.0`) → DefaultExtractors (SoundCloud, Spotify, AppleMusic, Vimeo, Reverbnation, Attachment)
   - `discord-player-youtubedlp` (`^1.2.2`) → YouTubeDlpExtractor (yt-dlp + youtubei.js)
-  - Clase custom `YouTubeDlpMixExtractor` (subclase, en `src/player/youtubeDlpMix.ts`)
+  - Clase custom `YouTubeDlpMixExtractor` (subclase, en `src/player/extractors/youtubeDlpMix.ts`)
 - **Procesamiento de audio:** `ffmpeg-static` (`^5.3.0`) + binario `yt-dlp` (lo provee el postinstall de `ytdlp-nodejs@3.4.5`)
 - **Dev:** `tsx` (`^4.23.15`)
 
@@ -90,13 +90,13 @@ SPOTIFY_CLIENT_SECRET=...            # Opcional
 ## Comandos npm
 
 ```bash
-npm run dev                # Arranca el bot en modo watch (tsx)
+npm run dev                # Arranca el bot (tsx, sin recarga automática)
 npm run build              # Compila con tsc a dist/
 npm start                  # Ejecuta node dist/index.js (producción)
 npm run deploy-commands    # Registra los slash commands en la guild (REST)
 ```
 
-> `deploy-commands.ts` registra comandos **de guild** (instantáneo, vía `GUILD_ID`).
+> `scripts/deploy-commands.ts` registra comandos **de guild** (instantáneo, vía `GUILD_ID`).
 > El registro global tarda hasta 1h y no se usa aquí.
 
 ---
@@ -104,30 +104,46 @@ npm run deploy-commands    # Registra los slash commands en la guild (REST)
 ## Arquitectura del Proyecto
 
 ```
-src/
-├── index.ts                  — Bootstrap: client, Player, registro de extractores, login
-├── commands/                 — Handlers de slash commands (cada uno exporta data + run)
-│   ├── play.ts               — /play <url|búsqueda> (normaliza URLs, elige extractor)
-│   ├── skip.ts               — /skip
-│   ├── stop.ts               — /stop (borra cola + panel vacío)
-│   ├── queue.ts              — /queue (lista cola, 10 primeros)
-│   ├── pause.ts              — /pause /resume (toggle)
-│   ├── loop.ts               — /loop (repeatMode 1 <-> 0)
-│   ├── shuffle.ts            — /shuffle (mezcla la cola)
-│   └── nowplaying.ts         — /nowplaying (info + barra de progreso)
-├── events/
-│   ├── ready.ts              — Suscripción a eventos del Player + panel
-│   └── interactionCreate.ts  — Router de interacciones (botones y slash commands)
-├── player/
-│   ├── youtubeDlpMix.ts      — YouTubeDlpMixExtractor (radio mixes como playlist)
-│   ├── panel.ts              — Panel interactivo (embed + botones + locks por guild)
-│   ├── panel-buttons.ts      — Handler de botones del panel
-│   └── controls.ts           — Utilidades: pause/skip/back/loop/shuffle/stop/voice check
-└── types/
-    └── index.ts              — Tipos compartidos (MusicQueue, BotConfig) — hoy poco usados
+├── src/
+│   ├── index.ts                  — Bootstrap: client, Player, registro de extractores, login
+│   ├── config.ts                 — Validación tipada de variables de entorno (BotConfig)
+│   ├── commands/
+│   │   ├── index.ts              — Registro tipado de comandos (router + deploy)
+│   │   └── music/                — Handlers de música (cada uno exporta data + run)
+│   │       ├── play.ts           — /play <url|búsqueda> (normaliza URLs, elige extractor)
+│   │       ├── skip.ts           — /skip
+│   │       ├── stop.ts           — /stop (borra cola + panel vacío)
+│   │       ├── queue.ts          — /queue (lista cola, 10 primeros)
+│   │       ├── pause.ts          — /pause (toggle pausa/reanuda)
+│   │       ├── loop.ts           — /loop (repeatMode 1 <-> 0)
+│   │       ├── shuffle.ts        — /shuffle (mezcla la cola)
+│   │       └── nowplaying.ts     — /nowplaying (info + barra de progreso)
+│   ├── events/
+│   │   ├── ready.ts              — Suscripción a eventos del Player + panel
+│   │   ├── interactionCreate.ts  — Router de interacciones (botones y slash commands)
+│   │   └── interactionResponses.ts — Respuesta de errores según estado de interacción
+│   ├── player/
+│   │   ├── extractors/
+│   │   │   └── youtubeDlpMix.ts  — YouTubeDlpMixExtractor (radio mixes como playlist)
+│   │   ├── panel/
+│   │   │   ├── panel.ts          — Panel interactivo (embed + botones + locks por guild)
+│   │   │   └── panel-buttons.ts  — Handler de botones del panel
+│   │   ├── controls.ts           — Utilidades de control y validación del canal de voz
+│   │   ├── queueSummary.ts       — Resumen compartido entre /queue y el botón 📋
+│   │   ├── url.ts                — normalizeUrl (extraído de play.ts, con tests)
+│   │   └── audioPreset.ts        — Preset de compresor DSP por cola
+│   └── types/
+│       ├── index.ts              — Tipos compartidos (MusicQueue, BotConfig)
+│       └── commands.ts           — Contrato Command / CommandContext / CommandCategory
+├── tests/                        — Pruebas (node:test vía tsx)
+├── scripts/
+│   └── deploy-commands.ts        — Registro de comandos vía REST (soporta --global)
+└── docs/                         — Arquitectura, setup y páginas legales
 ```
 
-**deploy-commands.ts** — registro de comandos vía REST (raíz del proyecto).
+**scripts/deploy-commands.ts** — registro de comandos vía REST usando el mismo
+registro que el router (`src/commands/index.ts`). Por defecto registra en la guild
+de `GUILD_ID`; con `--global` registra comandos globales.
 
 ---
 
@@ -135,7 +151,7 @@ src/
 
 1. `dotenv/config` carga `.env`.
 2. Valida `DISCORD_TOKEN`, `CLIENT_ID`, `GUILD_ID` (aborta si falta).
-3. Crea `Client` (discord.js) con intents: `Guilds`, `GuildVoiceStates`, `GuildMessages`, `GuildMembers`.
+3. Crea `Client` (discord.js) con intents mínimos: `Guilds` y `GuildVoiceStates`.
 4. Crea `Player` (discord-player).
 5. Opciones de extractores: si hay credenciales Spotify, las pasa al extractor `com.discord-player.spotifyextractor`.
 6. **Registro de extractores (orden importa):**
@@ -160,7 +176,7 @@ await player.extractors.register(YouTubeDlpMixExtractor, {
 
 ---
 
-## Flujo de `/play` (`src/commands/play.ts`)
+## Flujo de `/play` (`src/commands/music/play.ts`)
 
 1. `interaction.deferReply({ flags: 64 })` (ephemeral) para ganar tiempo; si ya estaba respondida, aborta.
 2. Lee `query` y la normaliza con `normalizeUrl`.
@@ -194,11 +210,14 @@ await player.extractors.register(YouTubeDlpMixExtractor, {
 
 ## Flujo de eventos de reproducción (`src/events/ready.ts`)
 
-- **`playerStart`**: log; actualiza el panel (embed + botones) en el canal donde se pidió la música.
+- **`queueCreate` / `audioTrackAdd` / `audioTracksAdd`**: emite logs JSON de creación de cola y pistas/listas añadidas; para listas incluye cantidad y una muestra del orden recibido.
+- **`playerStart`**: emite un log JSON con pista, posición, tamaño pendiente y tiempo desde que se encoló; actualiza el panel (embed + botones) en el canal donde se pidió la música.
 - **`playerPause` / `playerResume`**: re-render del panel con estado de pausa.
 - **`emptyQueue`**: log; vuelve el panel a estado "Cola vacía" (botones deshabilitados).
 - **`queueDelete`**: log informativo.
-- **`error` / `playerError`**: log del error (`console.error`). No rompe el bot.
+- **`error` / `playerError`**: log JSON de error con la pista activa y el tamaño de cola; no rompe el bot.
+
+Los eventos estructurados incluyen timestamp, canal y un `playbackSessionId` estable durante la vida de la cola, útil para correlacionar una sesión en la consola. No incluyen usuario ni URL completa de las pistas.
 
 > No se usa `setFilters` ni ningún filtro ffmpeg aquí (ver gotchas CRÍTICOS abajo).
 
@@ -220,9 +239,12 @@ await player.extractors.register(YouTubeDlpMixExtractor, {
 - Valida voz + cola activa, `deferUpdate()`, ejecuta la acción y re-renderiza el panel.
 - `panel_pause` → `togglePause`; `panel_skip` → `skipTrack`; `panel_back` → `backTrack` (necesita historial);
   `panel_stop` → `stopQueue` + `updateEmptyPanel`; `panel_queue` → resumen de cola (primeros 10).
+- Los botones que modifican reproducción exigen compartir canal de voz con el bot;
+  consultar la cola requiere voz, pero no estar en el mismo canal.
 
 ### `controls.ts`
 - `requireVoiceChannel(interaction)` → ¿el autor está en un canal de voz?
+- `requireSameVoiceChannel(interaction, queue)` → ¿comparte el canal del bot?
 - `getQueue(interaction)` → `useQueue(guildId)`.
 - `togglePause(queue)` → alterna y devuelve `true` si quedó pausado.
 - `skipTrack(queue)` → `queue.node.skip()` si hay algo reproduciéndose.
@@ -230,10 +252,18 @@ await player.extractors.register(YouTubeDlpMixExtractor, {
 - `toggleLoop(queue)` → `repeatMode` 1 ⇄ 0.
 - `shuffleQueue(queue)` → `queue.tracks.shuffle()`.
 - `stopQueue(queue)` → `queue.delete()`.
+- Los controles que modifican la reproducción requieren estar en el mismo canal de voz
+  que el bot. Consultar la cola sigue siendo de solo lectura.
+
+### `queueSummary.ts`
+- `buildQueueSummary(current, tracks)` → formato común de `/queue` y el botón `📋`.
+- `buildQueueReply(current, tracks)` → muestra “cola vacía” solo si no hay pista actual
+  ni canciones en espera.
+- Desactiva el parseo de menciones para títulos y artistas que vienen de fuentes externas.
 
 ---
 
-## `YouTubeDlpMixExtractor` (`src/player/youtubeDlpMix.ts`)
+## `YouTubeDlpMixExtractor` (`src/player/extractors/youtubeDlpMix.ts`)
 
 **Problema que resuelve:** el extractor base trataba cualquier `list=RD*` (radio mix de
 YouTube, p.ej. `RDGM...`, `RDMM...`, `RDEM...`, `RDAMVM...`) como **video único**
@@ -256,8 +286,10 @@ las canciones.
 
 1. **Botones** (`InteractionType.MessageComponent` + `isButton`): si `customId` empieza por
    `panel_` → `handlePanelButton`. Si lanza error, responde ephemeral.
-2. **Slash commands** (`InteractionType.ApplicationCommand`): `switch(commandName)`.
-3. Errores genéricos: si `deferred` → `editReply`; si no y no respondido → `reply`.
+2. **Slash commands** (`InteractionType.ApplicationCommand`): se resuelve el comando con
+   `getCommand(commandName)` desde el registro de `src/commands/index.ts` y se ejecuta con
+   `execute(interaction, { player })`. Añadir un comando no requiere tocar el router.
+3. Errores genéricos: `replyWithError` elige `editReply`, `followUp` o `reply` según el estado.
 4. Todo con `flags: 64` (EPHEMERAL).
 
 ---
@@ -267,8 +299,8 @@ las canciones.
 - Todas las respuestas usan `flags: 64` (ephemeral) para no llenar el canal.
 - `play.ts` distingue: `AbortError`/`Cancelled` (timeout → "tardó demasiado"),
   mensaje "Tiempo de espera agotado", y demás como error genérico.
-- `interactionCreate.ts` y `panel-buttons.ts` tienen try/catch que responden elegantemente
-  ante "already acknowledged"/"unknown interaction" (usa `catch(() => {})` silencioso).
+- `interactionCreate.ts` registra errores y usa `replyWithError` para responder según el
+  estado de la interacción; los fallos al enviar la respuesta se registran en consola.
 
 ---
 
@@ -312,9 +344,11 @@ las canciones.
   pasar `agent.cookies` al registrar el extractor. Decisión previa: se descartaron cookies,
   se usa yt-dlp.
 
-## 7. No hay tests automáticos
-- `npm test` sigue con el placeholder por defecto. La validación se hace manualmente
-  (arrancar bot + probar en Discord + revisar `/tmp/bot-ytdlp.log`).
+## 7. Tests automáticos
+- `npm test` ejecuta las pruebas con `tsx --test`; cubren estado del panel, respuestas de cola,
+  límites de resumen, autorización por canal de voz y reconocimiento de interacciones.
+- La validación de reproducción sigue requiriendo QA manual en Discord (arrancar el bot,
+  probar en un canal de voz y revisar la consola).
 - Para debug rápido de un extractor sin bot: script `tsx` que registra el extractor y
   llama `player.search(url, { searchEngine: 'ext:...' })`.
 
@@ -351,7 +385,7 @@ las canciones.
 
 ## Roadmap sugerido / posibles mejoras
 
-- **Tests automatizados** (vitest/jest) para `normalizeUrl` y el `YouTubeDlpMixExtractor`.
+- **Más tests automatizados** para `normalizeUrl` y el `YouTubeDlpMixExtractor`.
 - **Comandos globales** (no solo guild) cuando se quiera escalar a varios servidores.
 - **Sistema de cookies opcional** para combatir bloqueos de YouTube si yt-dlp dejara de funcionar.
 - **Persistencia de cola** entre reinicios (hoy la cola vive en memoria).
@@ -366,13 +400,19 @@ las canciones.
 | Archivo | Qué hace |
 |---------|----------|
 | `src/index.ts` | Bootstrap, intents, registro de extractores, login |
-| `deploy-commands.ts` | Registro de slash commands (guild) |
-| `src/commands/*.ts` | Handler por comando |
+| `src/config.ts` | Validación tipada del entorno (`BotConfig`) |
+| `scripts/deploy-commands.ts` | Registro de slash commands (guild o `--global`) |
+| `src/commands/index.ts` | Registro tipado de comandos (router + deploy) |
+| `src/commands/music/*.ts` | Handler por comando |
 | `src/events/ready.ts` | Eventos del Player + panel |
 | `src/events/interactionCreate.ts` | Router interactivo |
-| `src/player/youtubeDlpMix.ts` | Extractores de radio mixes |
-| `src/player/panel.ts` | Estado y render del panel |
-| `src/player/panel-buttons.ts` | Lógica de botones |
+| `src/player/extractors/youtubeDlpMix.ts` | Extractores de radio mixes |
+| `src/player/panel/panel.ts` | Estado y render del panel |
+| `src/player/panel/panel-buttons.ts` | Lógica de botones |
 | `src/player/controls.ts` | Utilidades de reproducción |
-| `src/types/index.ts` | Tipos compartidos (poco usados) |
+| `src/player/url.ts` | `normalizeUrl` (con tests de tabla) |
+| `src/types/commands.ts` | Contrato `Command` del registro |
+| `tests/` | Pruebas de regresión (`node:test`) |
+| `docs/ARCHITECTURE.md` | Este documento |
+| `docs/SETUP.md` | Guía de instalación paso a paso |
 | `AGENTS.md` | Guía de contexto para agentes (mantener al día) |

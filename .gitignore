@@ -1,17 +1,22 @@
-# Dependencies
+# Dependencias
 node_modules/
 
-# Build output
+# Build
 dist/
+coverage/
+*.tsbuildinfo
 
-# Environment variables
+# Variables de entorno (nunca commitear secretos)
 .env
 .env.local
 .env.*.local
 *.env
 *.env.*
+# ...excepto la plantilla pública
+!.env.example
 
 # Logs
+logs/
 *.log
 npm-debug.log*
 yarn-debug.log*
@@ -24,8 +29,8 @@ session-*.md
 # Runtime data
 pids/
 *.pid
-*.seed
 *.pid.lock
+*.seed
 
 # IDE
 .vscode/
@@ -34,12 +39,6 @@ pids/
 *.swo
 *~
 
-# OS
+# SO
 .DS_Store
 Thumbs.db
-
-# TypeScript cache
-*.tsbuildinfo
-
-# Optional npm dependencies
-package-lock.json

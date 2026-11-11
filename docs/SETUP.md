@@ -8,7 +8,7 @@ Guía paso a paso para configurar y agregar el bot **CubitoMusic** a tu servidor
 
 - Cuenta en [Discord Developer Portal](https://discord.com/developers/applications)
 - Cuenta en [Discord](https://discord.com) con permisos de administrador en el servidor donde quieres agregar el bot
-- Node.js 20+ instalado en tu máquina o servidor
+- Node.js 22+ instalado en tu máquina o servidor
 
 ---
 
@@ -45,9 +45,7 @@ Asociar la aplicación a un Team permite compartir el acceso con otros desarroll
 1. En el menú izquierdo, ve a **"Bot"**
 2. En **"Username"**, cambia a: **CubitoMusic**
 3. En **"Icon"**, sube un icono para el bot (opcional)
-4. En **"Privileged Gateway Intents"**, activa:
-   - ✅ **Server Members Intent**
-   - ✅ **Message Content Intent**
+4. No actives intents privilegiados para este bot: no son necesarios.
 5. Clic **"Save Changes"**
 6. En **"TOKEN"**, clic **"Copy"** y guárdalo (lo necesitarás después)
 
@@ -59,15 +57,19 @@ Asociar la aplicación a un Team permite compartir el acceso con otros desarroll
 
 ### Condiciones del Servicio
 
-1. Crea un archivo `Condiciones_ServiciosCM.md` con las condiciones del servicio de tu bot
-2. Publicalo en GitHub, Discord o cualquier plataforma accesible
+1. Adapta el contenido de `docs/legal/terms.html` (versión HTML) o `docs/legal/terms.md`
+2. Publícalo en GitHub Pages, Discord o cualquier plataforma accesible
 3. Anota la URL (la usarás en el Developer Portal)
 
 ### Política de Privacidad
 
-1. Crea un archivo `Politicas-PrivacidadCM.md` con la política de privacidad
-2. Publicalo en la misma plataforma que las condiciones
+1. Adapta el contenido de `docs/legal/privacy.html` o `docs/legal/privacy.md`
+2. Publícalo en la misma plataforma que las condiciones
 3. Anota la URL
+
+> **GitHub Pages:** las páginas canónicas viven en `docs/legal/`, pero `privacy.html`
+> y `terms.html` de la raíz existen como stubs con redirección. No borres esos stubs:
+> son las URLs registradas en el Developer Portal y deben seguir devolviendo 200.
 
 ### Configurar enlaces en Developer Portal
 
@@ -162,11 +164,14 @@ Deberías ver:
 
 | Comando | Descripción |
 |---------|-------------|
-| `/play <url\|búsqueda>` | Reproduce música desde YouTube, Spotify o URL |
-| `/skip` | Siguiente pista |
-| `/stop` | Detiene la música y desconecta |
+| `/play <url\|búsqueda>` | Reproduce música desde YouTube, YouTube Music, Spotify, SoundCloud o URL |
+| `/skip` | Salta a la siguiente pista |
+| `/stop` | Detiene la reproducción y limpia la cola |
 | `/queue` | Muestra la cola de reproducción |
 | `/pause` | Pausa o reanuda la reproducción |
+| `/loop` | Activa o desactiva la repetición de la pista |
+| `/shuffle` | Mezcla el orden de la cola |
+| `/nowplaying` | Muestra la canción actual |
 
 ---
 
