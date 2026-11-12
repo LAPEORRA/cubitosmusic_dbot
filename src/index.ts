@@ -26,9 +26,6 @@ if (config.spotify) {
     clientId: config.spotify.clientId,
     clientSecret: config.spotify.clientSecret,
   };
-  console.log('✅ Spotify configurado con credenciales');
-} else {
-  console.log('⚠️ Spotify sin credenciales (SPOTIFY_CLIENT_ID/SECRET no configurados)');
 }
 
 // Cargar extractores defaults primero, luego YouTube (yt-dlp) con prioridad.
@@ -42,15 +39,9 @@ await player.extractors.register(YouTubeDlpMixExtractor, {
   ytdlpTimeoutMs: 30000,
 });
 
-// Log de extractores registrados
-const registered = player.extractors.store;
-console.log('📋 Extractores:', Array.from(registered.values()).map((e: any) => `${e.constructor.name}(p${e.priority})`).join(', '));
-
-client.on(Events.ClientReady, () => ready(client, player, config.guildId));
+client.on(Events.ClientReady, () => ready(client, player, config.guildId, Boolean(config.spotify)));
 client.on(Events.InteractionCreate, (interaction) => interactionCreate(interaction, player));
 
-client.login(config.discordToken).then(() => {
-  console.log('🚀 Bot listo');
-}).catch(err => {
+client.login(config.discordToken).catch((err) => {
   console.error('❌ Error login:', err);
 });

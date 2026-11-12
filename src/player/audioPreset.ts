@@ -23,7 +23,6 @@ export function enableAudioPreset(queue: any): boolean {
     } | null;
     if (!cache) return false;
     cache.compressor = COMPRESSOR_PRESET;
-    console.log(`🎧 Compresor DSP activado: ${JSON.stringify(COMPRESSOR_PRESET)}`);
     return true;
   } catch (error) {
     console.error('❌ No se pudo activar el preset de audio:', error);

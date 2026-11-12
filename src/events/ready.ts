@@ -3,6 +3,7 @@ import { Client } from 'discord.js';
 import type { GuildQueue, Player, Track } from 'discord-player';
 import { buildPanelEmbed, buildPanelRows, updatePanel, setStartedAt, getStartedAt, updateEmptyPanel } from '../player/panel/panel.js';
 import { enableAudioPreset } from '../player/audioPreset.js';
+import { getSystemMetrics, logRow, printStartupBanner, type LogColor } from '../utils/logger.js';
 
 const playbackSessionIds = new WeakMap<GuildQueue, string>();
 const queuedAtByTrack = new WeakMap<Track, number>();
@@ -14,22 +15,6 @@ function getPlaybackSessionId(queue: GuildQueue): string {
     playbackSessionIds.set(queue, sessionId);
   }
   return sessionId;
-}
-
-function logPlaybackEvent(
-  event: string,
-  queue: GuildQueue,
-  details: Record<string, unknown> = {},
-) {
-  const output = event.endsWith('_error') ? console.error : console.log;
-  output(JSON.stringify({
-    timestamp: new Date().toISOString(),
-    event,
-    playbackSessionId: getPlaybackSessionId(queue),
-    guildId: queue.guild.id,
-    channel: queue.channel ? { id: queue.channel.id, name: queue.channel.name } : null,
-    ...details,
-  }));
 }
 
 function getTrackDetails(track: Track) {
@@ -69,16 +54,134 @@ function logTracksQueued(queue: GuildQueue, tracks: Track[]) {
   });
 }
 
-export const ready = async (client: Client, player: Player, guildId: string) => {
-  console.log(`✅ Bot listo como: ${client.user?.tag}`);
+function logPlaybackEvent(
+  event: string,
+  queue: GuildQueue,
+  details: Record<string, unknown> = {},
+  client?: Client,
+) {
+  const sessionId = String(details.sessionId ?? getPlaybackSessionId(queue));
+  const metrics = getSystemMetrics(client);
+  const channel = queue.channel?.name ?? null;
+
+  let badge = 'INFO';
+  let color: LogColor = 'gray';
+  let detail = '';
+  let metricsText = metrics;
+  const rawJson: Record<string, unknown> = { event, ...details };
+
+  switch (event) {
+    case 'queue_created': {
+      const presetActive = Boolean(details.presetActive);
+      badge = 'SESIÓN';
+      color = 'blue';
+      detail = `Sesión ${sessionId.slice(0, 6)} • Preset: ${presetActive ? 'activo' : 'off'}`;
+      break;
+    }
+    case 'tracks_queued': {
+      badge = '+COLA';
+      color = 'cyan';
+      const tracks = Array.isArray(details.tracks)
+        ? (details.tracks as Track[])
+        : [details.track as Track].filter(Boolean) as Track[];
+      const first = tracks[0];
+      detail = first
+        ? first.playlist?.title
+          ? `${first.playlist.title} +${tracks.length - 1} más`
+          : `${first.title} • ${first.duration ?? 'n/a'}`
+        : 'Cola actualizada';
+      metricsText = `En cola: ${queue.tracks.size}`;
+      break;
+    }
+    case 'playback_started': {
+      const track = (queue.currentTrack ?? details.track) as Track;
+      badge = '▶ PLAY';
+      color = 'green';
+      detail = `${track?.title ?? '—'} (${track?.duration ?? 'n/a'})`;
+      const queuedForMs = typeof details.queuedForMs === 'number' ? details.queuedForMs : 0;
+      const sequence = queue.history.tracks.size + 1;
+      metricsText = `Carga: ${(queuedForMs / 1000).toFixed(1)}s • #${sequence} • ${getSystemMetrics(client)}`;
+      break;
+    }
+    case 'player_pause': {
+      const track = queue.currentTrack;
+      badge = 'PAUSA';
+      color = 'yellow';
+      detail = track ? `${track.title} (${track.duration ?? 'n/a'})` : '—';
+      break;
+    }
+    case 'player_resume': {
+      const track = queue.currentTrack;
+      badge = 'REANUDA';
+      color = 'green';
+      detail = track ? `${track.title} (${track.duration ?? 'n/a'})` : '—';
+      break;
+    }
+    case 'queue_empty': {
+      badge = 'VACÍA';
+      color = 'magenta';
+      detail = 'Cola finalizada';
+      metricsText = `Total sesión: ${queue.history.tracks.size} temas`;
+      break;
+    }
+    case 'queue_deleted': {
+      badge = 'STOP';
+      color = 'gray';
+      detail = 'Sesión de reproducción cerrada';
+      break;
+    }
+    case 'player_error':
+    case 'playback_error': {
+      badge = event === 'playback_error' ? 'ERR AUDIO' : 'ERROR';
+      color = 'red';
+      detail = typeof details.error === 'object' && details.error !== null
+        ? getErrorDetails(details.error).errorMessage
+        : String(details.error ?? details.errorMessage ?? 'Error de reproducción');
+      break;
+    }
+    default: {
+      badge = 'INFO';
+      color = 'gray';
+      detail = event;
+      break;
+    }
+  }
+
+  logRow({
+    badge,
+    color,
+    channel,
+    detail: String(detail),
+    metrics: metricsText,
+    rawJson,
+  });
+}
+
+export const ready = async (client: Client, player: Player, guildId: string, spotifyEnabled = false) => {
+  let guildName = '—';
+  try {
+    const guild = await client.guilds.fetch(guildId);
+    guildName = guild.name;
+  } catch {
+    // El banner se imprime igualmente con el fallback de nombre
+  }
+
+  printStartupBanner({
+    botTag: client.user?.tag ?? 'CubitoMusic',
+    guildName,
+    spotifyEnabled,
+    extractorCount: player.extractors.store.size,
+    client,
+  });
 
   player.events.on('queueCreate', (queue) => {
-    getPlaybackSessionId(queue);
-    logPlaybackEvent('queue_created', queue);
-    enableAudioPreset(queue);
+    const sessionId = getPlaybackSessionId(queue);
+    const presetActive = enableAudioPreset(queue);
+    logPlaybackEvent('queue_created', queue, { sessionId, presetActive }, client);
   });
 
   player.events.on('audioTrackAdd', (queue, track) => logTracksQueued(queue, [track]));
+
   player.events.on('audioTracksAdd', (queue, tracks) => logTracksQueued(queue, tracks));
 
   // Registrar eventos del player
@@ -87,10 +190,8 @@ export const ready = async (client: Client, player: Player, guildId: string) => 
     queuedAtByTrack.delete(track);
     logPlaybackEvent('playback_started', queue, {
       ...getTrackDetails(track),
-      playbackSequence: queue.history.tracks.size + 1,
-      queueSize: queue.tracks.size,
-      queuedForMs: queuedAt === undefined ? null : Math.round(performance.now() - queuedAt),
-    });
+      queuedForMs: queuedAt === undefined ? 0 : Math.round(performance.now() - queuedAt),
+    }, client);
 
     const channel = (queue.metadata as any)?.channel as any;
     if (!channel) return;
@@ -105,6 +206,7 @@ export const ready = async (client: Client, player: Player, guildId: string) => 
     const channel = (queue.metadata as any)?.channel as any;
     const current = queue.currentTrack;
     if (!channel || !current) return;
+    logPlaybackEvent('player_pause', queue, {}, client);
     const embed = buildPanelEmbed(current, queue, getStartedAt(queue.guild.id), (queue.metadata as any)?.requestedBy?.username);
     const rows = buildPanelRows(true);
     void updatePanel(channel, embed, rows);
@@ -114,35 +216,28 @@ export const ready = async (client: Client, player: Player, guildId: string) => 
     const channel = (queue.metadata as any)?.channel as any;
     const current = queue.currentTrack;
     if (!channel || !current) return;
+    logPlaybackEvent('player_resume', queue, {}, client);
     const embed = buildPanelEmbed(current, queue, getStartedAt(queue.guild.id), (queue.metadata as any)?.requestedBy?.username);
     const rows = buildPanelRows(false);
     void updatePanel(channel, embed, rows);
   });
 
   player.events.on('emptyQueue', (queue) => {
-    logPlaybackEvent('queue_empty', queue, { queueSize: queue.tracks.size });
+    logPlaybackEvent('queue_empty', queue, {}, client);
     const channel = (queue.metadata as any)?.channel as any;
     void updateEmptyPanel(channel);
   });
 
   player.events.on('queueDelete', (queue) => {
-    logPlaybackEvent('queue_deleted', queue, { queueSize: queue.tracks.size });
+    logPlaybackEvent('queue_deleted', queue, {}, client);
   });
 
   player.events.on('error', (queue, error) => {
-    logPlaybackEvent('player_error', queue, {
-      ...getErrorDetails(error),
-      currentTrack: queue.currentTrack ? getTrackDetails(queue.currentTrack) : null,
-      queueSize: queue.tracks.size,
-    });
+    logPlaybackEvent('player_error', queue, { error }, client);
   });
 
   player.events.on('playerError', (queue, error) => {
-    logPlaybackEvent('playback_error', queue, {
-      ...getErrorDetails(error),
-      currentTrack: queue.currentTrack ? getTrackDetails(queue.currentTrack) : null,
-      queueSize: queue.tracks.size,
-    });
+    logPlaybackEvent('playback_error', queue, { error }, client);
   });
 
   try {

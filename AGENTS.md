@@ -62,7 +62,9 @@ src/
 └── types/
     ├── index.ts              — Tipos compartidos
     └── commands.ts           — Contrato Command / CommandContext / CommandCategory
-tests/                        — Pruebas (commands, events, player) con node:test
+├── utils/
+│   └── logger.ts            — Consola TUI: ANSI, banner, tabla de logs, métricas y logs a archivo
+tests/                        — Pruebas (commands, events, player, utils) con node:test
 scripts/deploy-commands.ts    — Registro de comandos vía REST (usa el registro del router)
 ```
 
