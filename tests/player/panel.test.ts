@@ -1,9 +1,17 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { ActionRowBuilder, ButtonBuilder, EmbedBuilder, Message } from 'discord.js';
+import {
+  ActionRowBuilder,
+  ButtonBuilder,
+  ButtonStyle,
+  ComponentType,
+  EmbedBuilder,
+  Message,
+} from 'discord.js';
 import type { GuildQueue, Track } from 'discord-player';
 import {
   buildPanelEmbed,
+  buildPanelRows,
   setPanelMessage,
   updateEmptyPanel,
   updatePanel,
@@ -31,6 +39,10 @@ function embedField(embed: EmbedBuilder, name: string): string | undefined {
   return embed.data.fields?.find((field) => field.name === name)?.value;
 }
 
+function buttonIds(row: ActionRowBuilder<ButtonBuilder>): Array<string | undefined> {
+  return row.components.map((button) => (button.data as { custom_id?: string }).custom_id);
+}
+
 test('an empty-queue panel update is not overwritten by a pending playback update', async () => {
   const guildId = `panel-test-${Date.now()}`;
   let description: string | undefined;
@@ -53,9 +65,11 @@ test('an empty-queue panel update is not overwritten by a pending playback updat
   const activeUpdate = updatePanel(
     { guildId },
     new EmbedBuilder().setTitle('Reproduciendo'),
-    new ActionRowBuilder<ButtonBuilder>().addComponents(
-      new ButtonBuilder().setCustomId('panel_pause').setLabel('Pausar').setStyle(1),
-    ),
+    [
+      new ActionRowBuilder<ButtonBuilder>().addComponents(
+        new ButtonBuilder().setCustomId('panel_pause').setLabel('Pausar').setStyle(1),
+      ),
+    ],
   );
   const emptyUpdate = updateEmptyPanel({ guildId });
 
@@ -90,4 +104,59 @@ test('el panel no anuncia /resume en los comandos', () => {
   const commands = embedField(embed, '🛠 Comandos') ?? '';
   assert.ok(!commands.includes('/resume'), `no debe mencionar /resume: ${commands}`);
   assert.ok(commands.includes('`/play <url|búsqueda>` | `/pause`'));
+});
+
+test('buildPanelRows devuelve dos filas con los controles y los botones nuevos', () => {
+  const rows = buildPanelRows(false);
+  assert.equal(rows.length, 2);
+
+  const ids = rows.map(buttonIds);
+  assert.deepEqual(ids[0], ['panel_back', 'panel_pause', 'panel_skip', 'panel_stop', 'panel_queue']);
+  assert.deepEqual(ids[1], ['panel_loop', 'panel_shuffle']);
+});
+
+test('el botón loop se marca en Success con repeatMode distinto de 0', () => {
+  const [, active] = buildPanelRows(false, 1);
+  assert.deepEqual(buttonIds(active), ['panel_loop', 'panel_shuffle']);
+  assert.equal(active.components[0].data.style, ButtonStyle.Success);
+  assert.equal(active.components[1].data.style, ButtonStyle.Secondary);
+
+  const [, idle] = buildPanelRows(false, 0);
+  assert.equal(idle.components[0].data.style, ButtonStyle.Secondary);
+});
+
+test('updateEmptyPanel deshabilita los botones de todas las filas', async () => {
+  const guildId = `panel-empty-${Date.now()}-${Math.random()}`;
+  let edited: any;
+
+  const apiRow = (customIds: string[]) => ({
+    type: ComponentType.ActionRow,
+    components: customIds.map((customId) => ({
+      type: ComponentType.Button,
+      custom_id: customId,
+      style: ButtonStyle.Secondary,
+    })),
+  });
+
+  const message = {
+    editable: true,
+    deletable: false,
+    components: [
+      apiRow(['panel_pause', 'panel_skip']),
+      apiRow(['panel_loop', 'panel_shuffle']),
+    ],
+    async edit(payload: unknown) {
+      edited = payload;
+      return message;
+    },
+  } as unknown as Message;
+
+  setPanelMessage(guildId, message);
+  await updateEmptyPanel({ guildId });
+
+  assert.equal(edited.components.length, 2);
+  const disabled = edited.components.flatMap((row: any) =>
+    row.components.map((component: any) => component.data.disabled),
+  );
+  assert.deepEqual(disabled, [true, true, true, true]);
 });

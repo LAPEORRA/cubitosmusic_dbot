@@ -62,7 +62,7 @@ export function buildPanelEmbed(track: Track, queue: GuildQueue, startedAt: Date
     .setFooter({ text: `CubitoMusic • ${queue.node.volume}% vol` });
 }
 
-export function buildPanelRows(isPaused: boolean) {
+export function buildPanelRows(isPaused: boolean, repeatMode: number = 0) {
   const back = new ButtonBuilder()
     .setCustomId('panel_back')
     .setEmoji('⏮')
@@ -88,7 +88,20 @@ export function buildPanelRows(isPaused: boolean) {
     .setEmoji('📋')
     .setStyle(ButtonStyle.Secondary);
 
-  return new ActionRowBuilder<ButtonBuilder>().addComponents(back, pause, skip, stop, queueBtn);
+  const loop = new ButtonBuilder()
+    .setCustomId('panel_loop')
+    .setEmoji('🔁')
+    .setStyle(repeatMode !== 0 ? ButtonStyle.Success : ButtonStyle.Secondary);
+
+  const shuffle = new ButtonBuilder()
+    .setCustomId('panel_shuffle')
+    .setEmoji('🔀')
+    .setStyle(ButtonStyle.Secondary);
+
+  const row1 = new ActionRowBuilder<ButtonBuilder>().addComponents(back, pause, skip, stop, queueBtn);
+  const row2 = new ActionRowBuilder<ButtonBuilder>().addComponents(loop, shuffle);
+
+  return [row1, row2];
 }
 
 function withPanelLock(guildId: string, task: () => Promise<void>) {
@@ -105,13 +118,13 @@ function withPanelLock(guildId: string, task: () => Promise<void>) {
   return next;
 }
 
-export async function updatePanel(channel: any, embed: EmbedBuilder, rows: ActionRowBuilder<ButtonBuilder>) {
+export async function updatePanel(channel: any, embed: EmbedBuilder, rows: ActionRowBuilder<ButtonBuilder>[]) {
   if (!channel) return;
 
   const guildId = channel.guildId;
   const payload = {
     embeds: [embed],
-    components: [rows],
+    components: rows,
   };
 
   return withPanelLock(guildId, async () => {

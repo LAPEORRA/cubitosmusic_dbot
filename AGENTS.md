@@ -9,7 +9,7 @@ Audio desde YouTube (yt-dlp + youtubei.js), YouTube Music, Spotify y SoundCloud.
 
 ## Restricción dura: la reproducción está CONGELADA
 Fue estabilizada tras mucho trabajo. **NO modificar:**
-- `src/commands/music/play.ts` — `searchEngine`, `signal`, `nodeOptions`, `volume: 70` (la normalización vive en `src/player/url.ts`, ya testeada)
+- `src/commands/music/play.ts` — `searchEngine`, `signal`, `volume: 70` y el resto de `nodeOptions` (hoy: auto-desconexión a los 5 min; no tocar sin pedido explícito)
 - `src/player/extractors/youtubeDlpMix.ts` — resolución de radio mixes (`list=RD*`) como playlist
 - Registro de extractores en `src/index.ts` (orden y opciones importan)
 - Ningún filtro ffmpeg (`setFilters` rompe el extractor, ver gotchas)
@@ -74,14 +74,14 @@ scripts/deploy-commands.ts    — Registro de comandos vía REST (usa el registr
 
 ## Flujos clave
 - **Control de reproducción**: `/pause`, `/skip`, `/stop`, `/loop`, `/shuffle` y los botones que modifican la reproducción solo funcionan desde el mismo canal de voz que el bot.
-- **`/play`**: `normalizeUrl` (en `src/player/url.ts`) → elige `searchEngine` por dominio (youtube.com → ytdlp, spotify.com → spotify, soundcloud.com → soundcloud, resto auto) → `player.play(channel, query, { signal: AbortSignal.timeout(30_000), searchEngine, nodeOptions })`. `nodeOptions`: `metadata {channel, requestedBy}`, `leaveOn*: false` (el bot NO se desconecta solo; lo gestiona `/stop`), `verifyFallbackStream: true`, `volume: 70` (única anti-saturación).
+- **`/play`**: `normalizeUrl` (en `src/player/url.ts`) → elige `searchEngine` por dominio (youtube.com → ytdlp, spotify.com → spotify, soundcloud.com → soundcloud, resto auto) → `player.play(channel, query, { requestedBy, signal: AbortSignal.timeout(30_000), searchEngine, nodeOptions })`. `nodeOptions`: `metadata {channel}`, `leaveOnEmpty/leaveOnEnd: true` con `*Cooldown: 300_000` (auto-desconexión tras 5 min), `leaveOnStop: false`, `verifyFallbackStream: true`, `volume: 70` (única anti-saturación). `requestedBy` va a nivel de pista, no en `metadata`.
 - **Panel**: los eventos de `playerStart`/pause/resume en `ready.ts` re-renderizan el embed en el canal de `queue.metadata.channel`. Estado por guild en Maps de `panel.ts` (`panelMessages`, `startedAtByGuild`, `panelLocks` — serializa ediciones). Si el mensaje ya no es editable, `updatePanel` lo borra y crea uno nuevo. `emptyQueue`/stop → `updateEmptyPanel` (botones deshabilitados).
-- **Botones**: contrato de ruteo = customIds `panel_back`, `panel_pause`, `panel_skip`, `panel_stop`, `panel_queue`. Nuevos botones deben seguir ese prefijo `panel_`.
+- **Botones**: contrato de ruteo = customIds `panel_back`, `panel_pause`, `panel_skip`, `panel_stop`, `panel_queue`, `panel_loop`, `panel_shuffle`. Nuevos botones deben seguir ese prefijo `panel_`.
 
 ## Gotchas críticos (reproducción — leer antes de tocar nada)
 1. **NO `queue.filters.ffmpeg.setFilters(...)`**: el stream de YouTubeDlpExtractor viene en `$fmt: 'raw'` (PCM) y el FFmpegFilterer lanza su propio ffmpeg que muere → `write EPIPE` → la pista se corta ~2s y se vacía la cola. `setFilters` además dispara `triggerReplay()` (re-elige la pista), así que no se llama ni desde `playerStart`.
 2. **`agent: { autoCookiesFromBrowser: false }` SIEMPRE** al registrar el extractor (si no, intenta leer cookies de Chrome y rompe el stream).
-3. **`leaveOn*: false`**: la desconexión del bot la hace `/stop` o el borrado de cola; no sale solo del canal.
+3. **`leaveOn*`**: `leaveOnEmpty`/`leaveOnEnd` están en `true` con cooldown de 300000 ms (5 min); `leaveOnStop` sigue en `false` porque `/stop` ya gestiona la desconexión.
 4. **Binarios**: `yt-dlp.exe` lo descarga `ytdlp-nodejs` en postinstall (requiere `allowScripts` o `npm approve-scripts`), `ffmpeg` lo da `ffmpeg-static`. Se auto-localizan; `setFFmpegPath`/`setYtDlpPath` solo si hay problemas.
 5. **ESM**: imports locales con extensión `.js` (`from './foo.js'`). tsconfig: target ESNext, module NodeNext, strict.
 

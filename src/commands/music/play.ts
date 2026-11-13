@@ -60,9 +60,11 @@ export async function play(interaction: any, player: Player) {
       searchEngine,
       nodeOptions: {
         metadata: { channel: interaction.channel },
-        leaveOnEmpty: false,    // No desconectar si la cola está vacía
-        leaveOnEnd: false,      // No desconectar cuando termina la pista
-        leaveOnStop: false,     // No desconectar al usar /stop
+        leaveOnEmpty: true,           // Desconectar si la cola queda vacía...
+        leaveOnEmptyCooldown: 300_000, // ...tras 5 minutos de inactividad
+        leaveOnEnd: true,             // Desconectar cuando termina la cola...
+        leaveOnEndCooldown: 300_000,   // ...tras 5 minutos
+        leaveOnStop: false,     // No desconectar al usar /stop (lo gestiona el comando)
         verifyFallbackStream: true,
         volume: 70, // Reducir volumen base para evitar saturación
       },

@@ -198,7 +198,7 @@ export const ready = async (client: Client, player: Player, guildId: string, spo
 
     setStartedAt(queue.guild.id, new Date());
     const embed = buildPanelEmbed(track, queue, getStartedAt(queue.guild.id));
-    const rows = buildPanelRows(queue.node.isPaused());
+    const rows = buildPanelRows(queue.node.isPaused(), queue.repeatMode);
     void updatePanel(channel, embed, rows);
   });
 
@@ -208,7 +208,7 @@ export const ready = async (client: Client, player: Player, guildId: string, spo
     if (!channel || !current) return;
     logPlaybackEvent('player_pause', queue, {}, client);
     const embed = buildPanelEmbed(current, queue, getStartedAt(queue.guild.id));
-    const rows = buildPanelRows(true);
+    const rows = buildPanelRows(true, queue.repeatMode);
     void updatePanel(channel, embed, rows);
   });
 
@@ -218,7 +218,7 @@ export const ready = async (client: Client, player: Player, guildId: string, spo
     if (!channel || !current) return;
     logPlaybackEvent('player_resume', queue, {}, client);
     const embed = buildPanelEmbed(current, queue, getStartedAt(queue.guild.id));
-    const rows = buildPanelRows(false);
+    const rows = buildPanelRows(false, queue.repeatMode);
     void updatePanel(channel, embed, rows);
   });
 

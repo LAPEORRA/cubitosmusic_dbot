@@ -5,19 +5,19 @@
 ## Estado actual
 
 - **Carpeta activa del proyecto:** `D:\cubitosmusic` (el workspace ha sido reubicado desde `D:\Proyectos_Opencode`).
-- **Es un repositorio git:** rama `main`. TUI ya commiteada (`4a61ee6`); el bloque de **fixes P0 está aplicado y verificado, sin commitear**.
+- **Es un repositorio git:** rama `main`. TUI (`4a61ee6`), fixes P0 (`a864230`) y comandos de cola (`cd30a8c`) commiteados; **autodesconexión + botones 🔁/🔀 sin commitear**.
 - **Últimos commits:**
+  - `cd30a8c` — feat: comandos de gestión de cola clear, remove y skipto
+  - `a864230` — fix: solicitante por pista, guardia de canal en /play y correcciones en panel
   - `4a61ee6` — fix: alineación final de la TUI, banner dinámico y logs de comandos/botones
   - `a3ebb8d` — docs: handoff para retomar la sesión actual
   - `80e26bb` — fix: consola TUI de logs - banner, colores por columna, ping y separador
-  - `2bad085` — feat: consola TUI de logs con banner, tabla alineada y métricas de sistema
-  - `a3c5687` — refactor: reorganiza el proyecto para revisión en GitHub
 - **Remoto:** `https://github.com/LAPEORRA/cubitosmusic_dbot.git` (`origin/main`). **Push pendiente** (no se hizo, por decisión del usuario).
 
 ## Verificación (todos en verde al último cambio)
 
 1. `npm run typecheck` → ✅ 0 errores (incluye `tsconfig.test.json`: src + tests + scripts)
-2. `npm test` → ✅ **29/29 pass, 0 fail**
+2. `npm test` → ✅ **39/39 pass, 0 fail**
 3. `npm run build` → ✅ OK (tsc → `dist/`)
 
 ## Qué se implementó en la fase de consola TUI (última tarea completada)
@@ -41,13 +41,24 @@
   - Trazas de interacción: `interactionCreate` registra badge `CMD` (magenta, `Usuario /<comando>`); `handlePanelButton` registra `BOTÓN` (magenta, `Clic en <acción>`) antes del `switch`.
   - Tests nuevos de alineación: DETALLES a 52, MÉTRICAS en offset fijo, borde del banner alineado. Suite: **23 tests**.
 
-## Fixes P0 aplicados (última tarea, sin commitear)
+## Fixes P0 aplicados (commit `a864230`)
 
 1. **Solicitante por pista** — `play.ts` pasa `requestedBy: interaction.user` como opción directa de `player.play()` (ya no dentro de `nodeOptions.metadata`, que solo se aplica al crear la cola) y refresca `requestedBy` en las pistas devueltas para cubrir la caché de búsquedas (5 h). `ready.ts` ya no lee el solicitante de `queue.metadata`; `buildPanelEmbed` prioriza `track.requestedBy?.username` y usa el fallback solo si falta.
 2. **Validación de canal en `/play`** — helper `canPlayInChannel(botChannelId, userChannelId)` en `controls.ts`; si el bot ya tiene cola en otro canal, `/play` responde pidiendo unirse a `<#canal>`.
 3. **Doble render del panel** — eliminado el `updatePanel` manual al final de `handlePanelButton`; el refresco queda solo en los eventos `playerStart`/`playerPause`/`playerResume` de `ready.ts` (`deferUpdate()` sigue ack-eando la interacción).
 4. **Texto del panel** — los comandos ya no mencionan `/resume` (`→ /play <url|búsqueda> | /pause`).
 5. **Tests:** +6 (prioridad de solicitante, fallback, Desconocido, sin `/resume`, guardia de canal). Suite: **29 tests**.
+
+## Comandos de gestión de cola + autodesconexión + panel (sin commitear)
+
+- **`/clear`** (`commands/music/clear.ts`) → `clearQueue()`: `queue.tracks.clear()`, responde vacía/limpiada.
+- **`/remove <posicion>`** → `removeTrack()`: `at()` + `removeOne(predicado)` (la API v7 no acepta índice), devuelve la pista eliminada.
+- **`/skipto <posicion>`** → `skipTo()`: `queue.node.skipTo(posicion - 1)`.
+- Los 3 comparten validaciones de voz (canal, cola, mismo canal) y ya se registraron en Discord vía `deploy-commands` (11 comandos).
+- **Autodesconexión:** `leaveOnEmpty/leaveOnEnd: true` + `*Cooldown: 300_000` (5 min); `leaveOnStop: false`.
+- **Panel de 2 filas:** `buildPanelRows(isPaused, repeatMode = 0)` → fila 1 (`back/pause/skip/stop/queue`) + fila 2 (`panel_loop` con Success si `repeatMode !== 0`, `panel_shuffle`). `updatePanel` recibe un array de rows; `updateEmptyPanel` deshabilita todas las filas.
+- **Botones nuevos:** `panel_loop`/`panel_shuffle` refrescan el panel en el propio handler (no emiten eventos); el resto sigue event-driven.
+- **Tests:** +10 (controls de cola, filas/botones, deshabilitado multi-fila). Suite: **39 tests**.
 
 ## Decisiones de diseño recientes
 

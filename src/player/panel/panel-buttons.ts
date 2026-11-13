@@ -4,10 +4,16 @@ import {
   skipTrack,
   stopQueue,
   togglePause,
+  toggleLoop,
+  shuffleQueue,
   requireVoiceChannel,
   requireSameVoiceChannel,
 } from '../controls.js';
 import {
+  buildPanelEmbed,
+  buildPanelRows,
+  getStartedAt,
+  updatePanel,
   updateEmptyPanel,
 } from './panel.js';
 import { buildQueueReply } from '../queueSummary.js';
@@ -53,6 +59,14 @@ export async function handlePanelButton(interaction: any) {
       skipTrack(queue);
       break;
     }
+    case 'panel_loop': {
+      toggleLoop(queue);
+      break;
+    }
+    case 'panel_shuffle': {
+      shuffleQueue(queue);
+      break;
+    }
     case 'panel_back': {
       const ok = await backTrack(queue);
       if (!ok) {
@@ -76,6 +90,13 @@ export async function handlePanelButton(interaction: any) {
       return;
   }
 
-  // El refresco visual lo hacen los eventos del player (`playerStart`/`playerPause`/`playerResume`
-  // en `ready.ts`); así evitamos doble edición del panel al pausar/reanudar.
+  // `loop`/`shuffle` no emiten eventos del player (a diferencia de pause/skip),
+  // así que refrescamos el panel aquí; el resto lo hace `ready.ts`.
+  if (customId === 'panel_loop' || customId === 'panel_shuffle') {
+    const current = queue.currentTrack;
+    if (current && channel) {
+      const embed = buildPanelEmbed(current, queue, getStartedAt(queue.guild.id));
+      await updatePanel(channel, embed, buildPanelRows(queue.node.isPaused(), queue.repeatMode));
+    }
+  }
 }

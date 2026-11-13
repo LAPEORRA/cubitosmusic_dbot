@@ -25,7 +25,7 @@
 | `/skip`, `/stop`, `/pause`/`/resume` | ✅ |
 | `/loop`, `/shuffle`, `/nowplaying`, `/queue` | ✅ |
 | `/clear`, `/remove`, `/skipto` (gestión de colas largas) | ✅ |
-| Panel interactivo con botones (⏮ ⏸ ⏭ ⏹ 📋) | ✅ |
+| Panel interactivo con botones (⏮ ⏸ ⏭ ⏹ 📋 + 🔁 🔀) | ✅ |
 | Anti-saturación de audio (volumen 70%, sin filtros ffmpeg) | ✅ |
 | GitHub Pages (terms + privacy) | ✅ |
 
@@ -190,11 +190,13 @@ await player.extractors.register(YouTubeDlpMixExtractor, {
    - `soundcloud.com` → `'ext:com.discord-player.soundcloudextractor'`
    - resto (búsqueda de texto o desconocido) → `undefined` (detección automática)
 4. Valida que el usuario esté en un canal de voz.
-5. `player.play(channel, query, { signal, searchEngine, nodeOptions })`.
+5. `player.play(channel, query, { requestedBy, signal, searchEngine, nodeOptions })`.
+   - `requestedBy: interaction.user` — metadato **por pista** (cada canción conserva su solicitante).
    - `signal: AbortSignal.timeout(30_000)` — protege contra AsyncQueue bloqueado por playlists largas.
    - `nodeOptions`:
-     - `metadata: { channel, requestedBy }` — usados por el panel y los botones.
-     - `leaveOnEmpty: false`, `leaveOnEnd: false`, `leaveOnStop: false` — **el bot NO se desconecta solo**; la desconexión la gestiona `/stop` o el borrado de cola.
+     - `metadata: { channel }` — canal donde vive el panel.
+     - `leaveOnEmpty: true` + `leaveOnEmptyCooldown: 300_000` y `leaveOnEnd: true` + `leaveOnEndCooldown: 300_000` — autodesconexión tras 5 min de inactividad.
+     - `leaveOnStop: false` — `/stop` gestiona la desconexión de forma explícita.
      - `verifyFallbackStream: true` — verifica que el stream esté vivo.
      - `volume: 70` — **única medida de anti-saturación** (ver gotchas).
 6. Responde confirmando: si fue playlist muestra título + nº de canciones encoladas; si no, el título de la pista.
@@ -234,14 +236,18 @@ Los eventos estructurados incluyen timestamp, canal y un `playbackSessionId` est
   - `panelMessages: guildId → Message` (mensaje del panel actual).
   - `startedAtByGuild: guildId → Date` (cuándo empezó la pista actual).
   - `panelLocks: guildId → Promise` (serializa ediciones para evitar carreras).
-- `buildPanelEmbed(track, queue, startedAt, requestedBy)` → embed con progreso, cola, comandos.
-- `buildPanelRows(isPaused)` → fila de 5 botones: `panel_back`, `panel_pause`, `panel_skip`, `panel_stop`, `panel_queue`.
-- `updatePanel(channel, embed, rows)` → edita el panel existente o crea uno nuevo (serializado por `withPanelLock`).
-- `updateEmptyPanel(channel)` → deshabilita los botones y pone "Cola vacía".
+- `buildPanelEmbed(track, queue, startedAt, fallbackRequestedBy?)` → embed con progreso, cola, comandos;
+  el solicitante sale de `track.requestedBy`.
+- `buildPanelRows(isPaused, repeatMode = 0)` → **dos filas**: `panel_back`, `panel_pause`, `panel_skip`,
+  `panel_stop`, `panel_queue` + `panel_loop` (Success si `repeatMode !== 0`) y `panel_shuffle`.
+- `updatePanel(channel, embed, rows)` → edita el panel existente o crea uno nuevo (serializado por `withPanelLock`); `rows` es un array de `ActionRowBuilder`.
+- `updateEmptyPanel(channel)` → deshabilita los botones de **todas** las filas y pone "Cola vacía".
 
 ### `panel-buttons.ts` (`handlePanelButton`)
-- Valida voz + cola activa, `deferUpdate()`, ejecuta la acción y re-renderiza el panel.
+- Valida voz + cola activa, `deferUpdate()`, ejecuta la acción y deja el re-render a los eventos
+  (`playerStart`/`playerPause`/`playerResume`); `panel_loop`/`panel_shuffle` refrescan aquí porque no emiten eventos.
 - `panel_pause` → `togglePause`; `panel_skip` → `skipTrack`; `panel_back` → `backTrack` (necesita historial);
+  `panel_loop` → `toggleLoop`; `panel_shuffle` → `shuffleQueue`;
   `panel_stop` → `stopQueue` + `updateEmptyPanel`; `panel_queue` → resumen de cola (primeros 10).
 - Los botones que modifican reproducción exigen compartir canal de voz con el bot;
   consultar la cola requiere voz, pero no estar en el mismo canal.
@@ -338,10 +344,11 @@ las canciones.
 - `ffmpeg` lo provee `ffmpeg-static`. `yt-dlp` lo provee `ytdlp-nodejs` (postinstall).
 - Se localizan automáticamente. Usar `setFFmpegPath`/`setYtDlpPath` solo si hay problemas.
 
-## 5. `leaveOn*: false` y desconexión
-- Con los tres `leaveOn*` en `false`, el bot NO sale del canal al vaciarse la cola.
-  La cola se elimina con `/stop` (o `emptyQueue` si hubo un error). El bot queda en el
-  canal "en espera". Si se quiere auto-desconexión, tocar `nodeOptions`.
+## 5. `leaveOn*` y desconexión
+- `leaveOnEmpty: true` + `leaveOnEmptyCooldown: 300_000` y `leaveOnEnd: true` + `leaveOnEndCooldown: 300_000`:
+  el bot abandona el canal tras **5 minutos** de inactividad (cola vacía o fin de la cola).
+- `leaveOnStop: false`: `/stop` desconecta de inmediato por su cuenta.
+- Añadir una pista nueva durante el cooldown cancela el temporizador (discord-player reinicia los timers).
 
 ## 6. Spotify / cookies de YouTube
 - Spotify sin `SPOTIFY_CLIENT_ID/SECRET` degrada (usa búsqueda). Con credenciales, resuelve
@@ -397,7 +404,7 @@ las canciones.
 - **Comandos globales** (no solo guild) cuando se quiera escalar a varios servidores.
 - **Sistema de cookies opcional** para combatir bloqueos de YouTube si yt-dlp dejara de funcionar.
 - **Persistencia de cola** entre reinicios (hoy la cola vive en memoria).
-- **Auto-desconexión** configurable por guild (hoy `leaveOn*: false` fijos).
+- **Auto-desconexión** configurable por guild (hoy fija a 5 min vía `leaveOn*Cooldown`).
 - **Soporte de `autoplay`** (canciones relacionadas) opcional.
 - **Rate limiter / anti-spam** para `/play`.
 
