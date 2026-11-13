@@ -12,10 +12,12 @@ import type { GuildQueue, Track } from 'discord-player';
 import {
   buildPanelEmbed,
   buildPanelRows,
+  getPanelMessage,
   setPanelMessage,
   updateEmptyPanel,
   updatePanel,
 } from '../../src/player/panel/panel.js';
+import { handlePanelButton } from '../../src/player/panel/panel-buttons.js';
 
 function fakeQueue(volume = 70): GuildQueue {
   return {
@@ -77,6 +79,25 @@ test('an empty-queue panel update is not overwritten by a pending playback updat
 
   assert.equal(description, '📭 **Cola vacía** — la reproducción terminó.');
   assert.equal(title, undefined);
+
+  // El panel deshabilitado ya no se retiene en memoria: la próxima sesión crea uno nuevo.
+  assert.equal(getPanelMessage(guildId), undefined);
+
+  const newMessage = { editable: true, deletable: false, components: [] } as unknown as Message;
+  let sent = 0;
+  await updatePanel(
+    {
+      guildId,
+      send: async () => {
+        sent += 1;
+        return newMessage;
+      },
+    },
+    new EmbedBuilder().setTitle('Nueva sesión'),
+    [new ActionRowBuilder<ButtonBuilder>()],
+  );
+  assert.equal(sent, 1);
+  assert.equal(getPanelMessage(guildId), newMessage);
 });
 
 test('el panel prioriza al solicitante de la pista actual sobre el fallback de la cola', () => {
@@ -159,4 +180,49 @@ test('updateEmptyPanel deshabilita los botones de todas las filas', async () => 
     row.components.map((component: any) => component.data.disabled),
   );
   assert.deepEqual(disabled, [true, true, true, true]);
+  assert.equal(getPanelMessage(guildId), undefined);
 });
+
+test('panel_shuffle avisa cuando no hay canciones en espera y no re-renderiza', async () => {
+  const followUps: any[] = [];
+  let sends = 0;
+
+  const interaction = {
+    guildId: 'guild-shuffle-empty',
+    customId: 'panel_shuffle',
+    channel: {
+      name: 'musica',
+      guildId: 'guild-shuffle-empty',
+      send: async () => {
+        sends += 1;
+      },
+    },
+    member: { voice: { channel: { id: 'voice-1' }, channelId: 'voice-1' } },
+    reply: async () => {},
+    deferUpdate: async () => {},
+    followUp: async (payload: any) => {
+      followUps.push(payload);
+    },
+  };
+
+  const queue = {
+    channel: { id: 'voice-1' },
+    currentTrack: { title: 'One More Time' },
+    repeatMode: 0,
+    node: { isPaused: () => false },
+    tracks: { data: [], shuffle: () => {} },
+  } as unknown as GuildQueue;
+
+  const originalLog = console.log;
+  console.log = () => {};
+  try {
+    await handlePanelButton(interaction, () => queue);
+  } finally {
+    console.log = originalLog;
+  }
+
+  assert.equal(followUps.length, 1);
+  assert.equal(followUps[0].content, '📭 No hay canciones en la cola para mezclar.');
+  assert.equal(sends, 0, 'no debe re-renderizar el panel');
+});
+

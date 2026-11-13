@@ -53,7 +53,7 @@ src/
 │   └── interactionResponses.ts — Respuesta de error según el estado de la interacción
 ├── player/
 │   ├── panel/panel.ts        — Estado en memoria del panel + builders de embed/botones + updatePanel/updateEmptyPanel
-│   ├── panel/panel-buttons.ts — handlePanelButton (pause/skip/back/stop/queue)
+│   ├── panel/panel-buttons.ts — handlePanelButton (pause/skip/back/stop/queue/loop/shuffle)
 │   ├── extractors/youtubeDlpMix.ts — YouTubeDlpMixExtractor (radio mixes → playlist)
 │   ├── controls.ts           — helpers; los controles requieren compartir canal de voz con el bot
 │   ├── queueSummary.ts       — Formato compartido de la cola en el comando y el panel
@@ -75,7 +75,7 @@ scripts/deploy-commands.ts    — Registro de comandos vía REST (usa el registr
 ## Flujos clave
 - **Control de reproducción**: `/pause`, `/skip`, `/stop`, `/loop`, `/shuffle` y los botones que modifican la reproducción solo funcionan desde el mismo canal de voz que el bot.
 - **`/play`**: `normalizeUrl` (en `src/player/url.ts`) → elige `searchEngine` por dominio (youtube.com → ytdlp, spotify.com → spotify, soundcloud.com → soundcloud, resto auto) → `player.play(channel, query, { requestedBy, signal: AbortSignal.timeout(30_000), searchEngine, nodeOptions })`. `nodeOptions`: `metadata {channel}`, `leaveOnEmpty/leaveOnEnd: true` con `*Cooldown: 300_000` (auto-desconexión tras 5 min), `leaveOnStop: false`, `verifyFallbackStream: true`, `volume: 70` (única anti-saturación). `requestedBy` va a nivel de pista, no en `metadata`.
-- **Panel**: los eventos de `playerStart`/pause/resume en `ready.ts` re-renderizan el embed en el canal de `queue.metadata.channel`. Estado por guild en Maps de `panel.ts` (`panelMessages`, `startedAtByGuild`, `panelLocks` — serializa ediciones). Si el mensaje ya no es editable, `updatePanel` lo borra y crea uno nuevo. `emptyQueue`/stop → `updateEmptyPanel` (botones deshabilitados).
+- **Panel**: los eventos de `playerStart`/pause/resume en `ready.ts` re-renderizan el embed en el canal de `queue.metadata.channel`. Estado por guild en Maps de `panel.ts` (`panelMessages`, `startedAtByGuild`, `panelLocks` — serializa ediciones). Si el mensaje ya no es editable, `updatePanel` lo borra y crea uno nuevo. `emptyQueue`/`queueDelete`/stop → `updateEmptyPanel` (botones deshabilitados) y `deletePanelMessage` libera los tres Maps para que no crezcan indefinidamente.
 - **Botones**: contrato de ruteo = customIds `panel_back`, `panel_pause`, `panel_skip`, `panel_stop`, `panel_queue`, `panel_loop`, `panel_shuffle`. Nuevos botones deben seguir ese prefijo `panel_`.
 
 ## Gotchas críticos (reproducción — leer antes de tocar nada)

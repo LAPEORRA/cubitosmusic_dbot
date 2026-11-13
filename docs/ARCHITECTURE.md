@@ -200,6 +200,7 @@ await player.extractors.register(YouTubeDlpMixExtractor, {
      - `verifyFallbackStream: true` — verifica que el stream esté vivo.
      - `volume: 70` — **única medida de anti-saturación** (ver gotchas).
 6. Responde confirmando: si fue playlist muestra título + nº de canciones encoladas; si no, el título de la pista.
+7. Errores: se registran en la TUI con `logRow` (badge `ERROR`) y al usuario solo se le muestra un mensaje genérico claro; nunca se reenvía `error.message` crudo de yt-dlp/extractores (salvo los avisos de timeout `AbortError`/`Tiempo de espera agotado`).
 
 ### `normalizeUrl` — reglas de reescritura
 - `music.youtube.com/watch?v=X` → `youtube.com/watch?v=X` (preserva `list=` si existe).
@@ -219,8 +220,8 @@ await player.extractors.register(YouTubeDlpMixExtractor, {
 - **`queueCreate` / `audioTrackAdd` / `audioTracksAdd`**: emite logs JSON de creación de cola y pistas/listas añadidas; para listas incluye cantidad y una muestra del orden recibido.
 - **`playerStart`**: emite un log JSON con pista, posición, tamaño pendiente y tiempo desde que se encoló; actualiza el panel (embed + botones) en el canal donde se pidió la música.
 - **`playerPause` / `playerResume`**: re-render del panel con estado de pausa.
-- **`emptyQueue`**: log; vuelve el panel a estado "Cola vacía" (botones deshabilitados).
-- **`queueDelete`**: log informativo.
+- **`emptyQueue`**: log; vuelve el panel a estado "Cola vacía" (botones deshabilitados) y libera la referencia del panel.
+- **`queueDelete`**: log + `updateEmptyPanel` (cubre la autodesconexión por `leaveOnEmpty`/`leaveOnEnd`) y limpieza de los Maps por guild.
 - **`error` / `playerError`**: log JSON de error con la pista activa y el tamaño de cola; no rompe el bot.
 
 Los eventos estructurados incluyen timestamp, canal y un `playbackSessionId` estable durante la vida de la cola, útil para correlacionar una sesión en la consola. No incluyen usuario ni URL completa de las pistas.
@@ -241,13 +242,13 @@ Los eventos estructurados incluyen timestamp, canal y un `playbackSessionId` est
 - `buildPanelRows(isPaused, repeatMode = 0)` → **dos filas**: `panel_back`, `panel_pause`, `panel_skip`,
   `panel_stop`, `panel_queue` + `panel_loop` (Success si `repeatMode !== 0`) y `panel_shuffle`.
 - `updatePanel(channel, embed, rows)` → edita el panel existente o crea uno nuevo (serializado por `withPanelLock`); `rows` es un array de `ActionRowBuilder`.
-- `updateEmptyPanel(channel)` → deshabilita los botones de **todas** las filas y pone "Cola vacía".
+- `updateEmptyPanel(channel)` → deshabilita los botones de **todas** las filas, pone "Cola vacía" y llama a `deletePanelMessage` (libera `Message`, `startedAt` y `panelLocks`).
 
 ### `panel-buttons.ts` (`handlePanelButton`)
 - Valida voz + cola activa, `deferUpdate()`, ejecuta la acción y deja el re-render a los eventos
   (`playerStart`/`playerPause`/`playerResume`); `panel_loop`/`panel_shuffle` refrescan aquí porque no emiten eventos.
 - `panel_pause` → `togglePause`; `panel_skip` → `skipTrack`; `panel_back` → `backTrack` (necesita historial);
-  `panel_loop` → `toggleLoop`; `panel_shuffle` → `shuffleQueue`;
+  `panel_loop` → `toggleLoop`; `panel_shuffle` → `shuffleQueue` (aviso si no hay pistas en espera);
   `panel_stop` → `stopQueue` + `updateEmptyPanel`; `panel_queue` → resumen de cola (primeros 10).
 - Los botones que modifican reproducción exigen compartir canal de voz con el bot;
   consultar la cola requiere voz, pero no estar en el mismo canal.

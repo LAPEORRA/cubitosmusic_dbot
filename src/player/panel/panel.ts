@@ -24,6 +24,7 @@ export function setPanelMessage(guildId: string, message: Message) {
 export function deletePanelMessage(guildId: string) {
   panelMessages.delete(guildId);
   startedAtByGuild.delete(guildId);
+  panelLocks.delete(guildId);
 }
 
 function timeAgo(date: Date): string {
@@ -113,6 +114,10 @@ function withPanelLock(guildId: string, task: () => Promise<void>) {
     .then(task)
     .catch((error) => {
       console.error(`❌ Error actualizando el panel de guild ${guildId}:`, error);
+    })
+    .finally(() => {
+      // Libera el lock cuando la cadena termina, salvo que ya exista una más reciente.
+      if (panelLocks.get(guildId) === next) panelLocks.delete(guildId);
     });
   panelLocks.set(guildId, next);
   return next;
@@ -175,6 +180,9 @@ export async function updateEmptyPanel(channel: any) {
           .setFooter({ text: 'CubitoMusic' })],
         components: disabledRows,
       });
+      // Panel deshabilitado en Discord: liberamos la referencia para no retener el Message en RAM
+      // y permitir que la próxima sesión cree un panel limpio. También limpia `panelLocks`.
+      deletePanelMessage(guildId);
     } catch (error) {
       deletePanelMessage(guildId);
       console.error('❌ Error actualizando el panel de cola vacía:', error);

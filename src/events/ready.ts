@@ -230,6 +230,8 @@ export const ready = async (client: Client, player: Player, guildId: string, spo
 
   player.events.on('queueDelete', (queue) => {
     logPlaybackEvent('queue_deleted', queue, {}, client);
+    const channel = (queue.metadata as any)?.channel as any;
+    void updateEmptyPanel(channel);
   });
 
   player.events.on('error', (queue, error) => {

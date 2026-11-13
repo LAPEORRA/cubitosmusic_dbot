@@ -2,6 +2,23 @@ import { SlashCommandBuilder, GuildMember } from 'discord.js';
 import { Player, useQueue } from 'discord-player';
 import { normalizeUrl } from '../../player/url.js';
 import { canPlayInChannel } from '../../player/controls.js';
+import { logRow } from '../../utils/logger.js';
+
+const GENERIC_PLAY_ERROR = '❌ No se pudo cargar esa pista o playlist. Verifica el enlace o intenta con otra búsqueda.';
+
+/**
+ * Mensaje seguro para Discord: no reenvía `error.message` crudo de yt-dlp/extractores
+ * (suelen incluir trazas largas). Conserva los avisos específicos de timeout.
+ */
+function playErrorMessage(error: any): string {
+  if (error?.name === 'AbortError' || error?.message === 'Cancelled') {
+    return '⏳ La operación tardó demasiado. Intenta de nuevo.';
+  }
+  if (error?.message?.includes('Tiempo de espera agotado')) {
+    return error.message;
+  }
+  return GENERIC_PLAY_ERROR;
+}
 
 export const data = new SlashCommandBuilder()
   .setName('play')
@@ -94,13 +111,12 @@ export async function play(interaction: any, player: Player) {
       flags: 64,
     });
   } catch (error: any) {
-    console.error('Error en /play:', error);
-    if (error.name === 'AbortError' || error.message === 'Cancelled') {
-      await interaction.editReply({ content: '⏳ La operación tardó demasiado. Intenta de nuevo.', flags: 64 }).catch(() => {});
-    } else if (error.message?.includes('Tiempo de espera agotado')) {
-      await interaction.editReply({ content: error.message, flags: 64 }).catch(() => {});
-    } else {
-      await interaction.editReply({ content: `❌ Error: ${error.message || 'No se pudo reproducir.'}`, flags: 64 }).catch(() => {});
-    }
+    logRow({
+      badge: 'ERROR',
+      color: 'red',
+      channel: voiceChannel.name,
+      detail: `Error en /play: ${error?.message ?? String(error)}`,
+    });
+    await interaction.editReply({ content: playErrorMessage(error), flags: 64 }).catch(() => {});
   }
 }
