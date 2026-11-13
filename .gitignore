@@ -1,5 +1,7 @@
 # Dependencias
 node_modules/
+*.rar
+contexto_*.txt
 
 # Build
 dist/

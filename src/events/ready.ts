@@ -85,11 +85,11 @@ function logPlaybackEvent(
         ? (details.tracks as Track[])
         : [details.track as Track].filter(Boolean) as Track[];
       const first = tracks[0];
-      detail = first
-        ? first.playlist?.title
-          ? `${first.playlist.title} +${tracks.length - 1} más`
-          : `${first.title} • ${first.duration ?? 'n/a'}`
-        : 'Cola actualizada';
+      detail = tracks.length > 1
+        ? `Playlist: ${first?.playlist?.title ?? 'Mix / Lista'} (+${tracks.length} pistas)`
+        : first
+          ? `${first.title} • ${first.duration ?? 'n/a'}`
+          : 'Cola actualizada';
       metricsText = `En cola: ${queue.tracks.size}`;
       break;
     }
@@ -239,11 +239,4 @@ export const ready = async (client: Client, player: Player, guildId: string, spo
   player.events.on('playerError', (queue, error) => {
     logPlaybackEvent('playback_error', queue, { error }, client);
   });
-
-  try {
-    const guild = await client.guilds.fetch(guildId);
-    console.log(`📝 Bot activo en guild: ${guild.name}`);
-  } catch (error) {
-    console.error('❌ Error:', error);
-  }
 };

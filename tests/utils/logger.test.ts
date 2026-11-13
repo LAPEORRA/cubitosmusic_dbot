@@ -11,10 +11,9 @@ test('paint aplica el código de color ANSI con reset al final', () => {
   assert.ok(colored.endsWith('\u001b[0m'));
 });
 
-test('formatLogTime devuelve HH:MM en zona America/Santiago', () => {
+test('formatLogTime devuelve HH:MM:SS en zona America/Santiago', () => {
   const formatted = formatLogTime(new Date('2026-11-12T14:34:59-03:00'));
-  assert.match(formatted, /^\d{2}:\d{2}$/);
-  assert.match(formatted, /:/);
+  assert.match(formatted, /^\d{2}:\d{2}:\d{2}$/);
 });
 
 test('getSystemMetrics incluye RAM y ping del WebSocket', () => {
