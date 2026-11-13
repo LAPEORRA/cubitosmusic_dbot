@@ -24,6 +24,7 @@
 | Spotify / SoundCloud (extractores defaults) | ✅ registrado (Spotify sin credenciales: degradado) |
 | `/skip`, `/stop`, `/pause`/`/resume` | ✅ |
 | `/loop`, `/shuffle`, `/nowplaying`, `/queue` | ✅ |
+| `/clear`, `/remove`, `/skipto` (gestión de colas largas) | ✅ |
 | Panel interactivo con botones (⏮ ⏸ ⏭ ⏹ 📋) | ✅ |
 | Anti-saturación de audio (volumen 70%, sin filtros ffmpeg) | ✅ |
 | GitHub Pages (terms + privacy) | ✅ |
@@ -117,6 +118,9 @@ npm run deploy-commands    # Registra los slash commands en la guild (REST)
 │   │       ├── pause.ts          — /pause (toggle pausa/reanuda)
 │   │       ├── loop.ts           — /loop (repeatMode 1 <-> 0)
 │   │       ├── shuffle.ts        — /shuffle (mezcla la cola)
+│   │       ├── clear.ts          — /clear (vacía la cola)
+│   │       ├── remove.ts         — /remove <posicion> (elimina una pista)
+│   │       ├── skipto.ts         — /skipto <posicion> (salta descartando anteriores)
 │   │       └── nowplaying.ts     — /nowplaying (info + barra de progreso)
 │   ├── events/
 │   │   ├── ready.ts              — Suscripción a eventos del Player + panel
@@ -251,6 +255,9 @@ Los eventos estructurados incluyen timestamp, canal y un `playbackSessionId` est
 - `backTrack(queue)` → `queue.history.previous()` si hay historial.
 - `toggleLoop(queue)` → `repeatMode` 1 ⇄ 0.
 - `shuffleQueue(queue)` → `queue.tracks.shuffle()`.
+- `clearQueue(queue)` → `queue.tracks.clear()`; `true` si había canciones.
+- `removeTrack(queue, position)` → elimina la posición 1-based y devuelve la pista (o `null`).
+- `skipTo(queue, position)` → `queue.node.skipTo(position - 1)` (descarta las anteriores).
 - `stopQueue(queue)` → `queue.delete()`.
 - Los controles que modifican la reproducción requieren estar en el mismo canal de voz
   que el bot. Consultar la cola sigue siendo de solo lectura.
@@ -378,6 +385,7 @@ las canciones.
    - `/play` con un radio mix `list=RD...` (debe encolar muchas canciones).
    - Botones del panel: ⏮ ⏸ ⏭ ⏹ 📋.
    - `/loop`, `/shuffle`, `/nowplaying`, `/pause`, `/skip`, `/stop`, `/queue`.
+   - `/clear`, `/remove <posicion>`, `/skipto <posicion>` con una cola de varios temas.
 3. Si algo falla, revisar el log del proceso (consola o redirección p.ej.
    `npx tsx src/index.ts > /tmp/bot-ytdlp.log 2>&1`).
 

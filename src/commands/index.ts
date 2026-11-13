@@ -2,7 +2,10 @@ import type { Command } from '../types/commands.js';
 
 import { data as playData, play } from './music/play.js';
 import { data as skipData, skip } from './music/skip.js';
+import { data as skiptoData, skipto } from './music/skipto.js';
 import { data as stopData, stop } from './music/stop.js';
+import { data as clearData, clear } from './music/clear.js';
+import { data as removeData, remove } from './music/remove.js';
 import { data as queueData, queue } from './music/queue.js';
 import { data as pauseData, pause } from './music/pause.js';
 import { data as loopData, loop } from './music/loop.js';
@@ -28,6 +31,24 @@ export const commands: Command[] = [
     category: 'music',
     help: 'Salta a la siguiente pista.',
     execute: (interaction) => skip(interaction),
+  },
+  {
+    data: skiptoData,
+    category: 'music',
+    help: 'Salta directamente a una canción de la cola.',
+    execute: (interaction) => skipto(interaction),
+  },
+  {
+    data: clearData,
+    category: 'music',
+    help: 'Vacía la cola de reproducción.',
+    execute: (interaction) => clear(interaction),
+  },
+  {
+    data: removeData,
+    category: 'music',
+    help: 'Elimina una canción de la cola por posición.',
+    execute: (interaction) => remove(interaction),
   },
   {
     data: stopData,

@@ -1,5 +1,5 @@
 import { GuildMember } from 'discord.js';
-import { GuildQueue } from 'discord-player';
+import { GuildQueue, Track } from 'discord-player';
 import { useQueue } from 'discord-player';
 
 type InteractionLike = {
@@ -73,6 +73,27 @@ export function shuffleQueue(queue: GuildQueue): boolean {
   if (!queue.tracks.data.length) return false;
   queue.tracks.shuffle();
   return true;
+}
+
+/** Vacía la cola. Devuelve `true` si había canciones. */
+export function clearQueue(queue: GuildQueue): boolean {
+  if (!queue.tracks.size) return false;
+  queue.tracks.clear();
+  return true;
+}
+
+/** Elimina la pista en `position` (1-based). Devuelve la pista o `null` si no existe. */
+export function removeTrack(queue: GuildQueue, position: number): Track | null {
+  const index = position - 1;
+  const track = queue.tracks.at(index);
+  if (!track) return null;
+  queue.tracks.removeOne((_track, idx) => idx === index);
+  return track;
+}
+
+/** Salta a la pista en `position` (1-based), descartando las anteriores. */
+export function skipTo(queue: GuildQueue, position: number): boolean {
+  return queue.node.skipTo(position - 1);
 }
 
 export async function stopQueue(queue: GuildQueue) {
