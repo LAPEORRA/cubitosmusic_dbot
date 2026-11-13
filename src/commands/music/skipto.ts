@@ -6,7 +6,7 @@ export const data = new SlashCommandBuilder()
   .setDescription('Salta directamente a una canción de la cola')
   .addIntegerOption(option =>
     option.setName('posicion')
-      .setDescription('Posición de la canción en la cola (empezando en 1)')
+      .setDescription('Posición en la cola de espera (1 = siguiente pista, ver /queue)')
       .setRequired(true)
       .setMinValue(1));
 
@@ -29,9 +29,13 @@ export async function skipto(interaction: any) {
     return interaction.reply({ content: '❌ Posición inválida.', flags: 64 });
   }
 
-  if (!skipTo(queue, position)) {
+  const target = skipTo(queue, position);
+  if (!target) {
     return interaction.reply({ content: '❌ Posición inválida.', flags: 64 });
   }
 
-  return interaction.reply({ content: `⏭️ Saltando a la posición **${position}**...`, flags: 64 });
+  return interaction.reply({
+    content: `⏭️ Saltando a **#${position}**: **${target.title}**`,
+    flags: 64,
+  });
 }

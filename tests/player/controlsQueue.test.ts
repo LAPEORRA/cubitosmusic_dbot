@@ -79,18 +79,25 @@ test('removeTrack devuelve null y no altera la cola con posición inválida', ()
   assert.deepEqual(store.map((track) => track.title), ['a', 'b']);
 });
 
-test('skipTo convierte la posición 1-based al índice del player', () => {
+test('skipTo convierte la posición 1-based al índice del player y devuelve la pista', () => {
   const { queue, skipCalls } = fakeQueue(['a', 'b', 'c']);
-  assert.equal(skipTo(queue, 3), true);
+  assert.equal(skipTo(queue, 3)?.title, 'c');
   assert.deepEqual(skipCalls, [2]);
 
   const first = fakeQueue(['a', 'b']);
-  assert.equal(skipTo(first.queue, 1), true);
+  assert.equal(skipTo(first.queue, 1)?.title, 'a');
   assert.deepEqual(first.skipCalls, [0]);
 });
 
-test('skipTo devuelve false si el player rechaza el salto', () => {
+test('skipTo devuelve null si el player rechaza el salto', () => {
   const { queue, skipCalls } = fakeQueue(['a', 'b'], () => false);
-  assert.equal(skipTo(queue, 2), false);
+  assert.equal(skipTo(queue, 2), null);
   assert.deepEqual(skipCalls, [1]);
+});
+
+test('skipTo devuelve null y no llama al player si la posición no existe', () => {
+  const { queue, skipCalls } = fakeQueue(['a', 'b']);
+  assert.equal(skipTo(queue, 3), null);
+  assert.equal(skipTo(queue, 0), null);
+  assert.deepEqual(skipCalls, []);
 });

@@ -149,17 +149,22 @@ export interface LogRowOptions {
   rawJson?: Record<string, unknown>;
 }
 
+/** Colapsa saltos de línea, tabulaciones y espacios múltiples en una sola línea. */
+function singleLine(text: string): string {
+  return String(text).replace(/\s+/g, ' ').trim();
+}
+
 /** Imprime una fila de la tabla de logs con columnas alineadas y color por columna. */
 export function logRow(opts: LogRowOptions): void {
   const time = formatLogTime();
-  const badgeText = `[${opts.badge}]`;
+  const badgeText = `[${singleLine(opts.badge)}]`;
   const badgeCol = paint(opts.color, `${ANSI_COLORS.bold}${fit(badgeText, COL_BADGE)}${ANSI_COLORS.reset}`);
-  const channelText = opts.channel ? `#${opts.channel}` : '-';
+  const channelText = opts.channel ? `#${singleLine(opts.channel)}` : '-';
   const channelCol = paint('cyan', fit(channelText, COL_CHANNEL));
-  const detailRaw = opts.detail;
+  const detailRaw = singleLine(opts.detail);
   const detailTruncated = detailRaw.length > 50 ? `${detailRaw.slice(0, 50)}…` : detailRaw;
   const detailCol = pad(detailTruncated, COL_DETAIL);
-  const metricsCol = paint('gray', opts.metrics ?? '');
+  const metricsCol = paint('gray', singleLine(opts.metrics ?? ''));
 
   const line = `  ${paint('gray', pad(time, COL_TIME))}${badgeCol}${channelCol}${detailCol} ${metricsCol}`;
   console.log(line);

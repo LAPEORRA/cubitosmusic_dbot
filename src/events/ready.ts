@@ -86,7 +86,9 @@ function logPlaybackEvent(
         : [details.track as Track].filter(Boolean) as Track[];
       const first = tracks[0];
       detail = tracks.length > 1
-        ? `Playlist: ${first?.playlist?.title ?? 'Mix / Lista'} (+${tracks.length} pistas)`
+        ? first?.playlist?.title
+          ? `Playlist: ${first.playlist.title} (+${tracks.length} pistas)`
+          : `Playlist añadida (+${tracks.length} pistas)`
         : first
           ? `${first.title} • ${first.duration ?? 'n/a'}`
           : 'Cola actualizada';
@@ -134,9 +136,11 @@ function logPlaybackEvent(
     case 'playback_error': {
       badge = event === 'playback_error' ? 'ERR AUDIO' : 'ERROR';
       color = 'red';
-      detail = typeof details.error === 'object' && details.error !== null
+      const errorText = typeof details.error === 'object' && details.error !== null
         ? getErrorDetails(details.error).errorMessage
         : String(details.error ?? details.errorMessage ?? 'Error de reproducción');
+      const failedTrack = queue.currentTrack;
+      detail = failedTrack ? `${failedTrack.title}: ${errorText}` : errorText;
       break;
     }
     default: {

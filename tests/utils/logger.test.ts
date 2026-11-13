@@ -96,6 +96,27 @@ test('logRow trunca el detalle a 50 caracteres con elipsis', () => {
   assert.ok(plain.includes(`${'a'.repeat(50)}…`));
 });
 
+test('logRow aplana saltos de línea y tabulaciones en una sola fila', () => {
+  const lines = captureLogs(() => {
+    logRow({
+      badge: 'ERROR\nX',
+      color: 'red',
+      channel: 'musica\n#2',
+      detail: 'yt-dlp\nWARNING:\tfallo\nsegunda línea',
+      metrics: 'RAM 84MB\nfallback',
+    });
+  });
+
+  assert.equal(lines.length, 1);
+  const plain = stripAnsi(lines[0]);
+  assert.equal(plain.includes('\n'), false);
+  assert.equal(plain.includes('\t'), false);
+  assert.match(plain, /\[ERROR X\]/);
+  assert.match(plain, /#musica #2/);
+  assert.match(plain, /yt-dlp WARNING: fallo segunda línea/);
+  assert.match(plain, /RAM 84MB fallback/);
+});
+
 test('printStartupBanner mantiene el borde derecho alineado con la línea superior', () => {
   const lines = captureLogs(() => {
     printStartupBanner({

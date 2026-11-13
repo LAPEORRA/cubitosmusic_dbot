@@ -6,7 +6,7 @@ export const data = new SlashCommandBuilder()
   .setDescription('Elimina una canción de la cola por su posición')
   .addIntegerOption(option =>
     option.setName('posicion')
-      .setDescription('Posición de la canción en la cola (empezando en 1)')
+      .setDescription('Posición en la cola de espera (1 = siguiente pista, ver /queue)')
       .setRequired(true)
       .setMinValue(1));
 

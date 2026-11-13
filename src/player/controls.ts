@@ -91,9 +91,12 @@ export function removeTrack(queue: GuildQueue, position: number): Track | null {
   return track;
 }
 
-/** Salta a la pista en `position` (1-based), descartando las anteriores. */
-export function skipTo(queue: GuildQueue, position: number): boolean {
-  return queue.node.skipTo(position - 1);
+/** Salta a la pista en `position` (1-based) y la devuelve; `null` si no existe o falla. */
+export function skipTo(queue: GuildQueue, position: number): Track | null {
+  const target = queue.tracks.at(position - 1) ?? null;
+  if (!target) return null;
+  if (!queue.node.skipTo(position - 1)) return null;
+  return target;
 }
 
 export async function stopQueue(queue: GuildQueue) {
