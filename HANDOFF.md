@@ -5,8 +5,9 @@
 ## Estado actual
 
 - **Carpeta activa del proyecto:** `D:\cubitosmusic` (el workspace ha sido reubicado desde `D:\Proyectos_Opencode`).
-- **Es un repositorio git:** rama `main`, working tree limpio.
+- **Es un repositorio git:** rama `main`. Working tree con el cierre de la TUI **sin commitear** (3 ajustes + este handoff).
 - **Últimos commits:**
+  - `a3ebb8d` — docs: handoff para retomar la sesión actual
   - `80e26bb` — fix: consola TUI de logs - banner, colores por columna, ping y separador
   - `2bad085` — feat: consola TUI de logs con banner, tabla alineada y métricas de sistema
   - `a3c5687` — refactor: reorganiza el proyecto para revisión en GitHub
@@ -15,7 +16,7 @@
 ## Verificación (todos en verde al último cambio)
 
 1. `npm run typecheck` → ✅ 0 errores (incluye `tsconfig.test.json`: src + tests + scripts)
-2. `npm test` → ✅ **21/21 pass, 0 fail**
+2. `npm test` → ✅ **23/23 pass, 0 fail**
 3. `npm run build` → ✅ OK (tsc → `dist/`)
 
 ## Qué se implementó en la fase de consola TUI (última tarea completada)
@@ -33,6 +34,11 @@
 - **`src/index.ts`**: sin `console.log` sueltos previos al banner; pasa `Boolean(config.spotify)` a `ready`.
 - **`src/player/audioPreset.ts`**: eliminado `console.log`.
 - **Tests:** `tests/utils/logger.test.ts` (nuevo, 8 tests). Total suite: 21 tests.
+- **Cierre de la TUI (3 ajustes):**
+  - `logRow`: columnas con ancho fijo (`COL_TIME=10`, `COL_BADGE=12`, `COL_CHANNEL=16`, `COL_DETAIL=52`); DETALLES se trunca a 50 + `…` y se rellena a 52 con `pad`; fila emitida como **un único string** (sin comas extra en `console.log`). Canal/badge se truncan con `fit`.
+  - `printStartupBanner`: ancho del recuadro **dinámico** según el contenido (mínimo 44, máx. 60 con truncado `…`), por lo que el borde derecho queda alineado incluso con `calculando...` o nombres largos; separador y encabezado derivan del mismo ancho de columnas.
+  - Trazas de interacción: `interactionCreate` registra badge `CMD` (magenta, `Usuario /<comando>`); `handlePanelButton` registra `BOTÓN` (magenta, `Clic en <acción>`) antes del `switch`.
+  - Tests nuevos de alineación: DETALLES a 52, MÉTRICAS en offset fijo, borde del banner alineado. Suite: **23 tests**.
 
 ## Decisiones de diseño recientes
 
@@ -41,8 +47,8 @@
 
 ## Pendientes / próximos pasos sugeridos
 
-1. **QA visual real** en terminal de Windows/PowerShell con el bot en vivo (`npm run dev` desde `D:\cubitosmusic`).
-2. **QA manual en Discord** del banner/logs (no se arrancó el bot tras el cambio).
+1. **QA visual real** en terminal de Windows/PowerShell con el bot en vivo (`npm run dev` desde `D:\cubitosmusic`). Preview estático del banner/tabla ya validado con `tsx`.
+2. **QA manual en Discord** del banner/logs + trazas `CMD`/`BOTÓN` (no se arrancó el bot tras el cambio).
 3. **Push pendiente:** `git push origin main` desde `D:\cubitosmusic`.
 4. **Bugs P0 conocidos (no tocados en refactor):** barra panel congelada, `/stop` que no desconecta, fuga de Maps, `/pause` toggle, errores crudos en `/play`, `audioPreset` privado.
 5. **Pendiente de arquitectura:** panel dinámico con throttle/coalescing, TUI (log-update/chalk), presence, web dashboard.

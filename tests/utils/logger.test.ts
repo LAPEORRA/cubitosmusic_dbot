@@ -1,9 +1,33 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import type { Client } from 'discord.js';
-import { ANSI_COLORS, formatLogTime, getSystemMetrics, logRow, paint, type LogColor } from '../../src/utils/logger.js';
+import {
+  ANSI_COLORS,
+  formatLogTime,
+  getSystemMetrics,
+  logRow,
+  paint,
+  printStartupBanner,
+  type LogColor,
+} from '../../src/utils/logger.js';
 
 const fakeClient = { ws: { ping: 42 } } as unknown as Client;
+
+function captureLogs(fn: () => void): string[] {
+  const originalLog = console.log;
+  const lines: string[] = [];
+  console.log = ((...args: unknown[]) => {
+    lines.push(args.map((a) => String(a)).join(' '));
+  }) as typeof console.log;
+  try {
+    fn();
+  } finally {
+    console.log = originalLog;
+  }
+  return lines;
+}
+
+const stripAnsi = (text: string) => text.replace(/\u001b\[[0-9;]*m/g, '');
 
 test('paint aplica el código de color ANSI con reset al final', () => {
   const colored = paint('red', 'ERROR');
@@ -27,13 +51,7 @@ test('getSystemMetrics funciona sin cliente', () => {
 });
 
 test('logRow imprime una fila alineada con badge, canal, detalle y métricas', () => {
-  const originalLog = console.log;
-  const lines: string[] = [];
-  console.log = ((...args: unknown[]) => {
-    lines.push(args.map((a) => String(a)).join(' '));
-  }) as typeof console.log;
-
-  try {
+  const lines = captureLogs(() => {
     logRow({
       badge: '▶ PLAY',
       color: 'green',
@@ -41,31 +59,67 @@ test('logRow imprime una fila alineada con badge, canal, detalle y métricas', (
       detail: 'Daft Punk - One More Time (3:45)',
       metrics: 'Carga: 2.1s • #1 • RAM 84.3MB • 42ms',
     });
-  } finally {
-    console.log = originalLog;
-  }
+  });
 
   assert.equal(lines.length, 1);
-  assert.match(lines[0], /\[▶ PLAY\]/);
-  assert.match(lines[0], /#musica-general/);
-  assert.match(lines[0], /Daft Punk - One More Time \(3:45\)/);
-  const plain = lines[0].replace(/\u001b\[[0-9;]*m/g, '');
+  const plain = stripAnsi(lines[0]);
+  assert.match(plain, /\[▶ PLAY\]/);
+  assert.match(plain, /#musica-general/);
+  assert.match(plain, /Daft Punk - One More Time \(3:45\)/);
+  assert.ok(plain.startsWith('  '), 'la fila debe empezar con 2 espacios');
   assert.ok(plain.length < 160, `fila demasiado larga: ${plain}`);
 });
 
+test('logRow rellena DETALLES a 52 caracteres y alinea MÉTRICAS', () => {
+  const lines = captureLogs(() => {
+    logRow({ badge: 'X', color: 'gray', channel: 'c', detail: 'uno', metrics: 'M1' });
+    logRow({ badge: 'ERR AUDIO', color: 'red', channel: 'canal-largo-123', detail: 'dos', metrics: 'M2' });
+  });
+
+  const [first, second] = lines.map(stripAnsi);
+
+  // DETALLES padded a 52 (3 + 49 espacios) antes de MÉTRICAS.
+  const detailStart = first.indexOf('uno');
+  assert.equal(first.slice(detailStart, detailStart + 52), `uno${' '.repeat(49)}`);
+
+  // La columna MÉTRICAS arranca en el mismo offset sin importar el badge/canal.
+  assert.equal(first.indexOf('M1'), second.indexOf('M2'));
+});
+
 test('logRow trunca el detalle a 50 caracteres con elipsis', () => {
-  let printed = '';
-  const originalLog = console.log;
-  console.log = ((...args: unknown[]) => {
-    printed = args.map((a) => String(a)).join(' ');
-  }) as typeof console.log;
-  try {
+  const lines = captureLogs(() => {
     logRow({ badge: 'X', color: 'gray', detail: 'a'.repeat(80), metrics: '' });
-  } finally {
-    console.log = originalLog;
-  }
-  assert.ok(printed.includes('…'));
-  assert.ok(!printed.includes('a'.repeat(80)));
+  });
+  const plain = stripAnsi(lines[0]);
+  assert.ok(plain.includes('…'));
+  assert.ok(!plain.includes('a'.repeat(80)));
+  assert.ok(plain.includes(`${'a'.repeat(50)}…`));
+});
+
+test('printStartupBanner mantiene el borde derecho alineado con la línea superior', () => {
+  const lines = captureLogs(() => {
+    printStartupBanner({
+      botTag: 'CubitoMusic#1234',
+      guildName: 'Servidor de prueba',
+      spotifyEnabled: true,
+      extractorCount: 4,
+      client: { ws: { ping: -1 } } as unknown as Client,
+    });
+  });
+
+  // Localiza la caja aunque el banner emita un salto de línea inicial en TTY.
+  const boxStart = lines.findIndex((line) => stripAnsi(line).startsWith('╭'));
+  assert.ok(boxStart >= 0, 'no se encontró el borde superior del banner');
+
+  // Borde superior + 6 filas + borde inferior.
+  const boxLines = lines.slice(boxStart, boxStart + 8);
+  const widths = new Set(boxLines.map((line) => stripAnsi(line).length));
+  assert.equal(widths.size, 1, `anchos inconsistentes: ${[...widths].join(', ')}`);
+  assert.ok(stripAnsi(boxLines[0]).endsWith('╮'));
+  assert.ok(stripAnsi(boxLines[7]).endsWith('╯'));
+
+  // Separador y encabezado comparten ancho.
+  assert.equal(stripAnsi(lines[boxStart + 8]).length, stripAnsi(lines[boxStart + 9]).length);
 });
 
 test('ANSI_COLORS expone los códigos base', () => {

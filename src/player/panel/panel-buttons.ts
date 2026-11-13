@@ -15,6 +15,7 @@ import {
   updateEmptyPanel,
 } from './panel.js';
 import { buildQueueReply } from '../queueSummary.js';
+import { logRow } from '../../utils/logger.js';
 
 export async function handlePanelButton(interaction: any) {
   const customId = interaction.customId as string;
@@ -39,6 +40,13 @@ export async function handlePanelButton(interaction: any) {
   await interaction.deferUpdate();
 
   const channel = (queue.metadata as any)?.channel;
+
+  logRow({
+    badge: 'BOTÓN',
+    color: 'magenta',
+    channel: interaction.channel?.name,
+    detail: `Clic en ${customId.replace('panel_', '')}`,
+  });
 
   switch (customId) {
     case 'panel_pause': {

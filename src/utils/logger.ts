@@ -43,6 +43,26 @@ function pad(text: string, width: number): string {
   return value.length >= width ? value : value + ' '.repeat(width - value.length);
 }
 
+/** Ajusta el texto exactamente a `width`: rellena con espacios o trunca con `…`. */
+function fit(text: string, width: number): string {
+  const value = String(text);
+  if (value.length > width) {
+    return width > 0 ? `${value.slice(0, width - 1)}…` : '';
+  }
+  return pad(value, width);
+}
+
+/** Trunca con `…` solo si excede `max` (no rellena). */
+function truncate(text: string, max: number): string {
+  return text.length > max && max > 0 ? `${text.slice(0, max - 1)}…` : text;
+}
+
+/** Anchos de columna de la tabla de logs (en caracteres visibles). */
+const COL_TIME = 10;
+const COL_BADGE = 12;
+const COL_CHANNEL = 16;
+const COL_DETAIL = 52;
+
 const logTimeFormatter = new Intl.DateTimeFormat('es-CL', {
   timeZone: 'America/Santiago',
   hour: '2-digit',
@@ -87,26 +107,36 @@ export function printStartupBanner(info: StartupBannerInfo): void {
     console.log('');
   }
 
-  const separatorWidth = 108;
-  const separator = '─'.repeat(separatorWidth);
-  const boxWidth = 46;
-  const boxLine = '─'.repeat(boxWidth);
-  const row = (text: string) => `│ ${pad(text, boxWidth - 2)} │`;
-
   const pingText = info.client?.ws?.ping !== undefined && info.client.ws.ping >= 0
     ? `${Math.round(info.client.ws.ping)}ms`
     : 'calculando...';
+  const ramMb = Math.round((process.memoryUsage().rss / 1024 / 1024) * 10) / 10;
+
+  const lines = [
+    'CUBITOS MUSIC v1.1.0',
+    `Bot: ${info.botTag}`,
+    `Servidor: ${info.guildName}`,
+    `Node: ${process.version}`,
+    `Spotify: ${info.spotifyEnabled ? 'activado' : 'sin credenciales'}`,
+    `Ping: ${pingText} • RAM: ${ramMb}MB • Extractores: ${info.extractorCount}`,
+  ].map((text) => truncate(text, 60));
+
+  // Ancho dinámico: el recuadro se ajusta al contenido (mínimo 44) y así el borde derecho queda alineado.
+  const textWidth = lines.reduce((max, text) => Math.max(max, text.length), 44);
+  const boxInner = textWidth + 2;
+  const boxLine = '─'.repeat(boxInner);
+  const row = (text: string) => `│ ${pad(text, textWidth)} │`;
+
+  const header = `  ${pad('HORA', COL_TIME)}${pad('EVENTO', COL_BADGE)}${pad('CANAL', COL_CHANNEL)}${pad('DETALLES', COL_DETAIL)} MÉTRICAS`;
+  const separator = '─'.repeat(header.length);
 
   console.log(`╭${boxLine}╮`);
-  console.log(row('CUBITOS MUSIC v1.1.0'));
-  console.log(row(`Bot: ${info.botTag}`));
-  console.log(row(`Servidor: ${info.guildName}`));
-  console.log(row(`Node: ${process.version}`));
-  console.log(row(`Spotify: ${info.spotifyEnabled ? 'activado' : 'sin credenciales'}`));
-  console.log(row(`Ping: ${pingText} • RAM: ${Math.round(process.memoryUsage().rss / 1024 / 1024 * 10) / 10}MB • Extractores: ${info.extractorCount}`));
+  for (const text of lines) {
+    console.log(row(text));
+  }
   console.log(`╰${boxLine}╯`);
   console.log(separator);
-  console.log('HORA       EVENTO          CANAL        DETALLES                          MÉTRICAS');
+  console.log(header);
   console.log(separator);
 }
 
@@ -123,15 +153,15 @@ export interface LogRowOptions {
 export function logRow(opts: LogRowOptions): void {
   const time = formatLogTime();
   const badgeText = `[${opts.badge}]`;
-  const badgeCol = paint(opts.color, `${ANSI_COLORS.bold}${badgeText}${ANSI_COLORS.reset}`);
+  const badgeCol = paint(opts.color, `${ANSI_COLORS.bold}${fit(badgeText, COL_BADGE)}${ANSI_COLORS.reset}`);
   const channelText = opts.channel ? `#${opts.channel}` : '-';
-  const channelCol = paint('cyan', channelText);
+  const channelCol = paint('cyan', fit(channelText, COL_CHANNEL));
   const detailRaw = opts.detail;
-  const detail = detailRaw.length > 50 ? `${detailRaw.slice(0, 50)}…` : detailRaw;
-  const detailCol = detail;
+  const detailTruncated = detailRaw.length > 50 ? `${detailRaw.slice(0, 50)}…` : detailRaw;
+  const detailCol = pad(detailTruncated, COL_DETAIL);
   const metricsCol = paint('gray', opts.metrics ?? '');
 
-  const line = `${paint('gray', time)}  ${badgeCol}  ${channelCol}  ${detailCol}  ${metricsCol}`;
+  const line = `  ${paint('gray', pad(time, COL_TIME))}${badgeCol}${channelCol}${detailCol} ${metricsCol}`;
   console.log(line);
 
   if (process.env.LOG_TO_FILE === 'true' && opts.rawJson) {

@@ -2,6 +2,7 @@ import { InteractionType } from 'discord.js';
 import type { Player } from 'discord-player';
 import { getCommand } from '../commands/index.js';
 import { handlePanelButton } from '../player/panel/panel-buttons.js';
+import { logRow } from '../utils/logger.js';
 import { replyWithError } from './interactionResponses.js';
 
 /**
@@ -40,6 +41,12 @@ export const interactionCreate = async (interaction: any, player: Player) => {
   }
 
   try {
+    logRow({
+      badge: 'CMD',
+      color: 'magenta',
+      channel: interaction.channel?.name,
+      detail: `Usuario /${commandName}`,
+    });
     await command.execute(interaction, { player });
   } catch (error) {
     console.error(`❌ Error en /${commandName}:`, error);
