@@ -1,89 +1,111 @@
 # Handoff — CubitoMusic
 
-> Documento de traspaso de sesión: resume el estado actual del proyecto para retomar en una sesión fresca.
+> Documento de traspaso de sesión: estado exacto del proyecto al **13-nov-2026** para retomar en una sesión fresca.
 
 ## Estado actual
 
-- **Carpeta activa del proyecto:** `D:\cubitosmusic` (el workspace ha sido reubicado desde `D:\Proyectos_Opencode`).
-- **Es un repositorio git:** rama `main`. TUI (`4a61ee6`), fixes P0 (`a864230`) y comandos de cola (`cd30a8c`) commiteados; **autodesconexión + botones 🔁/🔀 sin commitear**.
-- **Últimos commits:**
-  - `cd30a8c` — feat: comandos de gestión de cola clear, remove y skipto
-  - `a864230` — fix: solicitante por pista, guardia de canal en /play y correcciones en panel
-  - `4a61ee6` — fix: alineación final de la TUI, banner dinámico y logs de comandos/botones
-  - `a3ebb8d` — docs: handoff para retomar la sesión actual
-  - `80e26bb` — fix: consola TUI de logs - banner, colores por columna, ping y separador
-- **Remoto:** `https://github.com/LAPEORRA/cubitosmusic_dbot.git` (`origin/main`). **Push pendiente** (no se hizo, por decisión del usuario).
+- **Carpeta activa:** `D:\cubitosmusic` (reubicado desde `D:\Proyectos_Opencode`).
+- **Git:** rama `main`. Working tree **limpio** tras dos commits atómicos:
+  1. `fix: limpieza de Maps en panel, manejo de queueDelete y sanitización de errores en /play`
+  2. `fix: deduplicación de interacciones, silencio de 10062/40060 y eliminación de ephemeral`
+- **Base previa:** `262cb79` (`feat: autodesconexión por inactividad y botones loop/shuffle en el panel`).
+- **Remoto:** `https://github.com/LAPEORRA/cubitosmusic_dbot.git` (`origin/main`). **Push pendiente** (decisión del usuario).
 
-## Verificación (todos en verde al último cambio)
+### Últimos commits
+```
+fix: deduplicación de interacciones, silencio de 10062/40060 y eliminación de ephemeral
+fix: limpieza de Maps en panel, manejo de queueDelete y sanitización de errores en /play
+262cb79 feat: autodesconexión por inactividad y botones loop/shuffle en el panel
+cd30a8c feat: comandos de gestión de cola clear, remove y skipto
+a864230 fix: solicitante por pista, guardia de canal en /play y correcciones en panel
+4a61ee6 fix: alineación final de la TUI, banner dinámico y logs de comandos/botones
+a3ebb8d docs: handoff para retomar la sesión actual
+2bad085 fix: consola TUI de logs con banner, colores por columna, ping y separador
+```
 
-1. `npm run typecheck` → ✅ 0 errores (incluye `tsconfig.test.json`: src + tests + scripts)
-2. `npm test` → ✅ **39/39 pass, 0 fail**
+## Verificación (todo en verde al cerrar)
+
+1. `npm run typecheck` → ✅ 0 errores (src + tests + scripts)
+2. `npm test` → ✅ **51/51 pass, 0 fail**
 3. `npm run build` → ✅ OK (tsc → `dist/`)
 
-## Qué se implementó en la fase de consola TUI (última tarea completada)
+> `deploy-commands` ya se ejecutó: **11 comandos** registrados en el guild (`play, skip, skipto, clear, remove, stop, queue, pause, loop, shuffle, nowplaying`). Solo re-desplegar si cambia la definición (`data`) de algún comando.
 
-- **`src/utils/logger.ts`** (nuevo):
-  - ANSI helpers (`ANSI_COLORS`, `paint`).
-  - `formatLogTime` → `HH:MM:SS` (zona `America/Santiago`).
-  - `getSystemMetrics(client?)` → `RAM X.XMB • Ping Xms` / fallback `calculando...` si ping es `-1`/`undefined`.
-  - `printStartupBanner(info)`: salto de línea (`console.log('')` si TTY) + recuadro Unicode de ancho dinámico + encabezado de tabla con separador derivado de las columnas.
-  - `logRow({ badge, color, channel, detail, metrics, rawJson })`: columnas con colores propios (HORA gray, EVENTO badge color+bold, CANAL cyan, DETALLES normal, MÉTRICAS gray), detalle truncado a 50 chars + `…`, escritura opcional a `logs/playback.jsonl` si `LOG_TO_FILE=true`.
-- **`src/events/ready.ts`**:
-  - Firma: `ready(client, player, guildId, spotifyEnabled = false)`.
-  - `await client.guilds.fetch(guildId)` antes de `printStartupBanner` (nombre real del guild); eliminado el `console.log` residual.
-  - `logPlaybackEvent` con badges: `SESIÓN` (blue), `+COLA` (cyan), `▶ PLAY` (green), `PAUSA` (yellow), `REANUDA` (green), `VACÍA` (magenta), `STOP` (gray), `ERROR`/`ERR AUDIO` (red). Multi-playlist: `Playlist: X (+N pistas)`.
-- **`src/index.ts`**: sin `console.log` sueltos previos al banner; pasa `Boolean(config.spotify)` a `ready`.
-- **`src/player/audioPreset.ts`**: eliminado `console.log`.
-- **Tests:** `tests/utils/logger.test.ts` (nuevo, 8 tests). Total suite: 21 tests.
-- **Cierre de la TUI (3 ajustes):**
-  - `logRow`: columnas con ancho fijo (`COL_TIME=10`, `COL_BADGE=12`, `COL_CHANNEL=16`, `COL_DETAIL=52`); DETALLES se trunca a 50 + `…` y se rellena a 52 con `pad`; fila emitida como **un único string** (sin comas extra en `console.log`). Canal/badge se truncan con `fit`.
-  - `printStartupBanner`: ancho del recuadro **dinámico** según el contenido (mínimo 44, máx. 60 con truncado `…`), por lo que el borde derecho queda alineado incluso con `calculando...` o nombres largos; separador y encabezado derivan del mismo ancho de columnas.
-  - Trazas de interacción: `interactionCreate` registra badge `CMD` (magenta, `Usuario /<comando>`); `handlePanelButton` registra `BOTÓN` (magenta, `Clic en <acción>`) antes del `switch`.
-  - Tests nuevos de alineación: DETALLES a 52, MÉTRICAS en offset fijo, borde del banner alineado. Suite: **23 tests**.
+## Trabajo completado (cronológico)
 
-## Fixes P0 aplicados (commit `a864230`)
+### 1. Consola TUI (`src/utils/logger.ts`)
+- ANSI nativo, sin dependencias. `formatLogTime` (HH:MM:SS, `America/Santiago`), `getSystemMetrics` (`RAM …MB • Ping …ms`, fallback `calculando...`).
+- `printStartupBanner`: recuadro Unicode de ancho **dinámico** (mín. 44, máx. 60, truncado `…`), separador derivado del encabezado.
+- `logRow`: columnas fijas (`COL_TIME=10`, `COL_BADGE=12`, `COL_CHANNEL=16`, `COL_DETAIL=52`), DETALLES truncado a 50 + `…` y rellenado a 52, fila emitida como **un único string**. Opcional `logs/playback.jsonl` con `LOG_TO_FILE=true`.
+- Badges en `ready.ts`: `SESIÓN`, `+COLA`, `▶ PLAY`, `PAUSA`, `REANUDA`, `VACÍA`, `STOP`, `ERROR`, `ERR AUDIO`. `interactionCreate` loguea `CMD` y `handlePanelButton` loguea `BOTÓN`.
+- `ready(client, player, guildId, spotifyEnabled=false)` hace `guilds.fetch` antes del banner.
 
-1. **Solicitante por pista** — `play.ts` pasa `requestedBy: interaction.user` como opción directa de `player.play()` (ya no dentro de `nodeOptions.metadata`, que solo se aplica al crear la cola) y refresca `requestedBy` en las pistas devueltas para cubrir la caché de búsquedas (5 h). `ready.ts` ya no lee el solicitante de `queue.metadata`; `buildPanelEmbed` prioriza `track.requestedBy?.username` y usa el fallback solo si falta.
-2. **Validación de canal en `/play`** — helper `canPlayInChannel(botChannelId, userChannelId)` en `controls.ts`; si el bot ya tiene cola en otro canal, `/play` responde pidiendo unirse a `<#canal>`.
-3. **Doble render del panel** — eliminado el `updatePanel` manual al final de `handlePanelButton`; el refresco queda solo en los eventos `playerStart`/`playerPause`/`playerResume` de `ready.ts` (`deferUpdate()` sigue ack-eando la interacción).
-4. **Texto del panel** — los comandos ya no mencionan `/resume` (`→ /play <url|búsqueda> | /pause`).
-5. **Tests:** +6 (prioridad de solicitante, fallback, Desconocido, sin `/resume`, guardia de canal). Suite: **29 tests**.
-
-## Comandos de gestión de cola + autodesconexión + panel (sin commitear)
-
-- **`/clear`** (`commands/music/clear.ts`) → `clearQueue()`: `queue.tracks.clear()`, responde vacía/limpiada.
-- **`/remove <posicion>`** → `removeTrack()`: `at()` + `removeOne(predicado)` (la API v7 no acepta índice), devuelve la pista eliminada.
-- **`/skipto <posicion>`** → `skipTo()`: `queue.node.skipTo(posicion - 1)`.
-- Los 3 comparten validaciones de voz (canal, cola, mismo canal) y ya se registraron en Discord vía `deploy-commands` (11 comandos).
+### 2. Bugs P0 (commits `a864230` y `262cb79`)
+- **Solicitante por pista:** `requestedBy: interaction.user` va como opción directa de `player.play()`; `nodeOptions.metadata` solo lleva `{ channel }` (solo se aplica al crear la cola). Se refresca `requestedBy` en las pistas devueltas por la caché de búsquedas. `buildPanelEmbed` prioriza `track.requestedBy?.username`.
+- **Canal de `/play`:** `canPlayInChannel(botChannelId, userChannelId)`; si el bot ya está en otro canal, pide unirse.
+- **Doble render:** `handlePanelButton` no re-renderiza pause/skip/back (lo hacen los eventos `playerStart`/`playerPause`/`playerResume`). **Excepción:** `panel_loop`/`panel_shuffle` refrescan en el handler porque no emiten eventos.
+- **Panel:** sin `/resume` en el texto de comandos.
 - **Autodesconexión:** `leaveOnEmpty/leaveOnEnd: true` + `*Cooldown: 300_000` (5 min); `leaveOnStop: false`.
-- **Panel de 2 filas:** `buildPanelRows(isPaused, repeatMode = 0)` → fila 1 (`back/pause/skip/stop/queue`) + fila 2 (`panel_loop` con Success si `repeatMode !== 0`, `panel_shuffle`). `updatePanel` recibe un array de rows; `updateEmptyPanel` deshabilita todas las filas.
-- **Botones nuevos:** `panel_loop`/`panel_shuffle` refrescan el panel en el propio handler (no emiten eventos); el resto sigue event-driven.
-- **Tests:** +10 (controls de cola, filas/botones, deshabilitado multi-fila). Suite: **39 tests**.
 
-## Decisiones de diseño recientes
+### 3. Comandos de gestión de cola (commit `cd30a8c`)
+- `/clear` → `clearQueue()` (`queue.tracks.clear()`).
+- `/remove <posicion>` → `removeTrack()`: `at()` + `removeOne((_, idx) => idx === index)`; en v7 `removeOne` recibe **predicado**, no índice.
+- `/skipto <posicion>` → `skipTo()`: `queue.node.skipTo(posicion - 1)`.
+- Los tres validan canal de voz, cola existente y mismo canal que el bot; opción `posicion` es `IntegerOption` requerida con `minValue(1)`.
 
-- Consola sin dependencias externas: solo ANSI nativo + `node:fs`/`node:path`. Sin animaciones nuevas; `console.clear` sustituido por salto de línea para no cortar el banner en PowerShell.
-- Solo `console.log` cuando `process.stdout.isTTY` para refrescos; para escritura a archivo se usa flag env.
+### 4. Panel de 2 filas (commit `262cb79`)
+- `buildPanelRows(isPaused, repeatMode = 0)` → `[row1, row2]`: fila 1 (`panel_back`, `panel_pause`, `panel_skip`, `panel_stop`, `panel_queue`) + fila 2 (`panel_loop` 🔁 con `Success` si `repeatMode !== 0`, `panel_shuffle` 🔀).
+- `updatePanel(channel, embed, rows)` recibe **array** de `ActionRowBuilder`; `updateEmptyPanel` deshabilita todas las filas.
 
-## Pendientes / próximos pasos sugeridos
+### 5. Cierre P0 de memoria/panel/errores (commit 1 de esta sesión)
+- `deletePanelMessage` limpia `panelMessages`, `startedAtByGuild` y `panelLocks`. `withPanelLock` usa `.finally()` para borrar el lock cuando la cadena termina (si sigue siendo el actual).
+- `updateEmptyPanel` llama a `deletePanelMessage` tras deshabilitar los botones (libera el `Message` y los Maps); la próxima sesión crea un panel limpio.
+- `queueDelete` en `ready.ts` → `updateEmptyPanel(channel)`, cubriendo `leaveOnEmpty`/`leaveOnEnd`.
+- `panel_shuffle` con cola vacía responde `📭 No hay canciones en la cola para mezclar.` y no re-renderiza.
+- `/play`: `catch` usa `logRow` (`badge: 'ERROR'`, `red`, `channel: voiceChannel.name`) y `playErrorMessage()`: genérico `❌ No se pudo cargar esa pista o playlist…` salvo timeouts (`AbortError`/`Cancelled`, `Tiempo de espera agotado`). Nunca se expone `error.message` crudo de yt-dlp.
+- `handlePanelButton(interaction, resolveQueue = useQueue)` acepta resolvedor de cola inyectable (para tests).
 
-1. **QA visual real** en terminal de Windows/PowerShell con el bot en vivo (`npm run dev` desde `D:\cubitosmusic`). Preview estático del banner/tabla ya validado con `tsx`.
-2. **QA manual en Discord** del banner/logs + trazas `CMD`/`BOTÓN` (no se arrancó el bot tras el cambio).
-3. **Push pendiente:** `git push origin main` desde `D:\cubitosmusic`.
-4. **Bugs P0 restantes (no tocados en este bloque):** panel congelado en casos borde, `/stop` que no desconecta, fuga de Maps, `/pause` toggle, errores crudos en `/play` más allá del canal, `audioPreset` privado. (Ya corregidos: solicitante por pista, canal de `/play`, doble render y texto `/resume`).
-5. **Pendiente de arquitectura:** panel dinámico con throttle/coalescing, TUI (log-update/chalk), presence, web dashboard.
+### 6. Blindaje de interacciones (commit 2 de esta sesión)
+- **Deduplicación:** `interactionCreate.ts` mantiene `handledInteractions: Set<string>`; si el `interaction.id` ya existe, `return` inmediato. TTL de **15 s** por `setTimeout(...).unref()` (no retiene el proceso en tests). Evita ejecuciones dobles del mismo evento.
+- **Errores 10062/40060:** `isInteractionConsumedError()` en `interactionResponses.ts`. En `interactionCreate.ts`, `handleInteractionFailure()` registra una fila limpia `Interacción expirada o ya respondida (${code})` con `logRow` (`badge: 'ERROR'`, `red`) y **no** intenta responder. Para errores reales registra `${contexto}: ${message}` y responde el mensaje genérico.
+- `replyWithError` ya no usa `console.error`: ignora 10062/40060 y para el resto escribe con `logRow`.
+- **`ephemeral` eliminado** de todos los `reply`/`followUp` de `panel-buttons.ts` (discord.js v14.27 emite `DeprecationWarning`); queda solo `flags: 64`.
+- El log `[BOTÓN]` se emite **después** de `await interaction.deferUpdate()`, así un fallo del defer no deja un log de acción antes del error. Cubierto por tests.
+- Tests: `tests/events/interactionCreate.test.ts` (dedupe y fallos), `tests/player/panelButtons.test.ts` (sin `ephemeral` y orden del log). Total **51**.
 
-## Archivos clave para retomar
+## Pendientes / próximos pasos
 
-- Consola: `src/utils/logger.ts`
-- Eventos/loop: `src/events/ready.ts`, `src/events/interactionCreate.ts`, `src/events/interactionResponses.ts`, `src/player/panel/panel.ts`, `src/player/panel/panel-buttons.ts`
-- Reproducción congelada: `src/commands/music/play.ts` (solo `searchEngine/signal/nodeOptions/volume`), `src/player/extractors/youtubeDlpMix.ts`, registro en `src/index.ts`, `src/player/url.ts`
-- Comandos/registry: `src/commands/index.ts`, `src/commands/music/*`, `src/types/commands.ts`
-- Config: `src/config.ts`
+1. **`git push origin main`** (todo lo local, incluidos los commits de esta sesión).
+2. **QA visual real** de la TUI en PowerShell con el bot vivo (`npm run dev`). Preview estático ya validado con `tsx`.
+3. **QA manual en Discord:** banner/logs, trazas `CMD`/`BOTÓN`, botones 🔁/🔀, `/clear`, `/remove`, `/skipto`, autodesconexión a los 5 min y ausencia de warnings `ephemeral`.
+4. **Bugs P0 restantes (no tocados):** panel congelado en casos borde, `/stop` que no desconecta, `/pause` toggle, `audioPreset` privado.
+5. **Arquitectura pendiente:** panel dinámico con throttle/coalescing, TUI avanzada (`log-update`/chalk), presence, web dashboard.
 
-## Lecciones del entorno (recurrentes)
+## Archivos clave
 
-- `D:\Proyectos_Opencode` NO es escribible por el usuario actual (ACL de otro Windows / SID de máquina distinto) → se reubicó el proyecto a `D:\cubitosmusic` (copia limpia con `.git` incluido, 1.3 MB, `npm ci` reproducido).
-- El antiguo `D:\Proyectos_Opencode` quedó como respaldo intacto; no se eliminó (requiere permisos de admin).
-- El wrapper de shell no soporta redirecciones `>` en comandos; usar variables/constructs sin redirect si se necesita.
-- Git estaba ausente → instalado vía winget (`Git.Git` 2.56.0); usar `C:\Program Files\Git\cmd\git.exe` explícito.
+- **Consola:** `src/utils/logger.ts`
+- **Panel/eventos:** `src/events/ready.ts`, `src/events/interactionCreate.ts`, `src/events/interactionResponses.ts`, `src/player/panel/panel.ts`, `src/player/panel/panel-buttons.ts`
+- **Controles:** `src/player/controls.ts` (`togglePause`, `skipTrack`, `backTrack`, `toggleLoop`, `shuffleQueue`, `clearQueue`, `removeTrack`, `skipTo`, `canPlayInChannel`)
+- **Comandos/registry:** `src/commands/index.ts`, `src/commands/music/*`, `src/types/commands.ts`
+- **Config:** `src/config.ts`
+- **Tests:** `tests/player/*` (panel, panelButtons, controls, cola, voz, URL), `tests/events/*` (interactionCreate, interactionResponses), `tests/commands/*`, `tests/utils/logger.test.ts`
+
+## Restricciones y gotchas (leer antes de tocar reproducción)
+
+1. **Reproducción congelada:** no cambiar en `src/commands/music/play.ts` los valores de `searchEngine`, `signal`, `volume: 70` ni el resto de `nodeOptions` sin pedido explícito. Tampoco `src/player/extractors/youtubeDlpMix.ts` ni el registro/orden de extractores en `src/index.ts`.
+2. **NO usar `queue.filters.ffmpeg.setFilters(...)`**: el stream del extractor es PCM `$fmt: 'raw'`; el FFmpegFilterer lanza otro ffmpeg → `write EPIPE` y se vacía la cola. Además `setFilters` dispara `triggerReplay()`.
+3. **`agent: { autoCookiesFromBrowser: false }` SIEMPRE** al registrar YouTubeDlpExtractor.
+4. **`leaveOn*` actual:** `leaveOnEmpty`/`leaveOnEnd` en `true` con cooldown de 300000 ms; `leaveOnStop` en `false` (`/stop` desconecta explícitamente).
+5. **discord-player v7.2:**
+   - `requestedBy` va en las opciones de `player.play()` (nivel pista), no en `nodeOptions.metadata` (que solo aplica al crear la cola).
+   - `queue.tracks.removeOne()` recibe un predicado; `queue.node.skipTo()` acepta índice numérico.
+   - La caché de búsquedas dura ~5 h y puede reutilizar `Track` con `requestedBy` antiguo (por eso se refresca).
+6. **ESM estricto:** imports locales con `.js` (`from './foo.js'`); tsconfig `NodeNext` + `strict`.
+7. **Respuestas al usuario:** español, siempre `flags: 64` (ephemeral). **No** usar la propiedad `ephemeral: true` (deprecada en discord.js v14.27).
+
+## Lecciones del entorno
+
+- `D:\Proyectos_Opencode` NO es escribible (ACL de otro Windows/SID); el respaldo quedó intacto, no borrarlo sin admin.
+- Git instalado vía winget (`Git.Git` 2.56.0): usar `C:\Program Files\Git\cmd\git.exe` si `git` no resuelve.
+- Shell (PowerShell): **no** soporta `&&`; separar comandos con `;`. El wrapper no maneja redirecciones `>`: usar variables o construcciones sin redirect.
+- `npm run dev` es `tsx src/index.ts` **sin watch**; para hot reload: `npx tsx watch src/index.ts`.
