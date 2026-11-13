@@ -2,7 +2,7 @@ import { SlashCommandBuilder, GuildMember } from 'discord.js';
 import { Player, useQueue } from 'discord-player';
 import { normalizeUrl } from '../../player/url.js';
 import { canPlayInChannel } from '../../player/controls.js';
-import { logRow } from '../../utils/logger.js';
+import { logRow, traceEvent } from '../../utils/logger.js';
 
 const GENERIC_PLAY_ERROR = '❌ No se pudo cargar esa pista o playlist. Verifica el enlace o intenta con otra búsqueda.';
 
@@ -29,11 +29,22 @@ export const data = new SlashCommandBuilder()
       .setRequired(true));
 
 export async function play(interaction: any, player: Player) {
+  const deferStartedAt = performance.now();
   try {
     await interaction.deferReply({ flags: 64 });
   } catch {
+    traceEvent('timing', 'play_defer_reply', {
+      interactionId: interaction.id,
+      deferMs: performance.now() - deferStartedAt,
+      succeeded: false,
+    });
     return;
   }
+  traceEvent('timing', 'play_defer_reply', {
+    interactionId: interaction.id,
+    deferMs: performance.now() - deferStartedAt,
+    succeeded: true,
+  });
 
   const rawQuery = interaction.options.getString('query')!;
   const normalized = normalizeUrl(rawQuery);
@@ -71,21 +82,33 @@ export async function play(interaction: any, player: Player) {
     // 30s para permitir la resolución de playlists largas
     const signal = AbortSignal.timeout(30_000);
 
-    const result = await player.play(channel, normalized, {
-      requestedBy: interaction.user, // Metadatos por pista: cada canción conserva a su solicitante
-      signal,
-      searchEngine,
-      nodeOptions: {
-        metadata: { channel: interaction.channel },
-        leaveOnEmpty: true,           // Desconectar si la cola queda vacía...
-        leaveOnEmptyCooldown: 300_000, // ...tras 5 minutos de inactividad
-        leaveOnEnd: true,             // Desconectar cuando termina la cola...
-        leaveOnEndCooldown: 300_000,   // ...tras 5 minutos
-        leaveOnStop: false,     // No desconectar al usar /stop (lo gestiona el comando)
-        verifyFallbackStream: true,
-        volume: 70, // Reducir volumen base para evitar saturación
-      },
-    });
+    const extractStartedAt = performance.now();
+    let result;
+    try {
+      result = await player.play(channel, normalized, {
+        requestedBy: interaction.user, // Metadatos por pista: cada canción conserva a su solicitante
+        signal,
+        searchEngine,
+        nodeOptions: {
+          metadata: { channel: interaction.channel },
+          leaveOnEmpty: true,           // Desconectar si la cola queda vacía...
+          leaveOnEmptyCooldown: 300_000, // ...tras 5 minutos de inactividad
+          leaveOnEnd: true,             // Desconectar cuando termina la cola...
+          leaveOnEndCooldown: 300_000,   // ...tras 5 minutos
+          leaveOnStop: false,     // No desconectar al usar /stop (lo gestiona el comando)
+          verifyFallbackStream: true,
+          volume: 70, // Reducir volumen base para evitar saturación
+        },
+      });
+    } finally {
+      traceEvent('timing', 'play_extract', {
+        interactionId: interaction.id,
+        extractMs: performance.now() - extractStartedAt,
+        normalized,
+        searchEngine: searchEngine ?? null,
+        tracksReturned: result?.searchResult?.tracks.length ?? (result?.track ? 1 : 0),
+      });
+    }
 
     // Validación completa: verificar que result y result.track existan
     if (!result) {

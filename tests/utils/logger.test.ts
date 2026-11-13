@@ -1,4 +1,7 @@
 import assert from 'node:assert/strict';
+import { existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { test } from 'node:test';
 import type { Client } from 'discord.js';
 import {
@@ -8,6 +11,8 @@ import {
   logRow,
   paint,
   printStartupBanner,
+  serializeError,
+  traceEvent,
   type LogColor,
 } from '../../src/utils/logger.js';
 
@@ -28,6 +33,35 @@ function captureLogs(fn: () => void): string[] {
 }
 
 const stripAnsi = (text: string) => text.replace(/\u001b\[[0-9;]*m/g, '');
+
+function withTemporaryWorkingDirectory<T>(run: (directory: string) => T): T {
+  const originalDirectory = process.cwd();
+  const directory = mkdtempSync(join(tmpdir(), 'cubitosmusic-logger-'));
+  try {
+    process.chdir(directory);
+    return run(directory);
+  } finally {
+    process.chdir(originalDirectory);
+    rmSync(directory, { recursive: true, force: true });
+  }
+}
+
+function withTraceEnvironment<T>(liveTrace: string | undefined, logToFile: string | undefined, run: () => T): T {
+  const previousLiveTrace = process.env.LIVE_TRACE;
+  const previousLogToFile = process.env.LOG_TO_FILE;
+  if (liveTrace === undefined) delete process.env.LIVE_TRACE;
+  else process.env.LIVE_TRACE = liveTrace;
+  if (logToFile === undefined) delete process.env.LOG_TO_FILE;
+  else process.env.LOG_TO_FILE = logToFile;
+  try {
+    return run();
+  } finally {
+    if (previousLiveTrace === undefined) delete process.env.LIVE_TRACE;
+    else process.env.LIVE_TRACE = previousLiveTrace;
+    if (previousLogToFile === undefined) delete process.env.LOG_TO_FILE;
+    else process.env.LOG_TO_FILE = previousLogToFile;
+  }
+}
 
 test('paint aplica el código de color ANSI con reset al final', () => {
   const colored = paint('red', 'ERROR');
@@ -149,4 +183,61 @@ test('ANSI_COLORS expone los códigos base', () => {
   assert.equal(ANSI_COLORS.bold, '\u001b[1m');
   const _unused: LogColor = 'green';
   assert.equal(typeof _unused, 'string');
+});
+
+test('serializeError incluye campos de Error y serializa cause recursivamente', () => {
+  const cause = Object.assign(new TypeError('causa original'), { code: 'E_ORIGINAL' });
+  const error = Object.assign(new Error('fallo principal', { cause }), { code: 42 });
+  const serialized = serializeError(error);
+
+  assert.deepEqual(Object.keys(serialized), ['name', 'message', 'code', 'stack', 'cause']);
+  assert.equal(serialized.name, 'Error');
+  assert.equal(serialized.message, 'fallo principal');
+  assert.equal(serialized.code, 42);
+  assert.match(serialized.stack ?? '', /fallo principal/);
+  assert.deepEqual(serialized.cause, {
+    name: 'TypeError',
+    message: 'causa original',
+    code: 'E_ORIGINAL',
+    stack: cause.stack,
+    cause: null,
+  });
+});
+
+test('serializeError convierte valores que no son instancias Error', () => {
+  assert.deepEqual(serializeError('fallo'), {
+    name: 'Error',
+    message: 'fallo',
+    code: null,
+    stack: null,
+    cause: null,
+  });
+});
+
+test('traceEvent no crea archivos con LIVE_TRACE y LOG_TO_FILE apagados', () => {
+  withTemporaryWorkingDirectory((directory) => {
+    withTraceEnvironment('false', 'false', () => {
+      traceEvent('debug', 'test_disabled', { value: 1 });
+    });
+    assert.equal(existsSync(join(directory, 'logs', 'live-trace.jsonl')), false);
+  });
+});
+
+test('traceEvent agrega JSON válido a live-trace.jsonl cuando LIVE_TRACE está activo', () => {
+  withTemporaryWorkingDirectory((directory) => {
+    withTraceEnvironment('true', 'false', () => {
+      traceEvent('timing', 'test_enabled', { deferMs: 12.5 });
+    });
+
+    const tracePath = join(directory, 'logs', 'live-trace.jsonl');
+    const lines = readFileSync(tracePath, 'utf8').trim().split('\n');
+    assert.equal(lines.length, 1);
+    assert.deepEqual(JSON.parse(lines[0]), {
+      timestamp: JSON.parse(lines[0]).timestamp,
+      category: 'timing',
+      event: 'test_enabled',
+      deferMs: 12.5,
+    });
+    assert.ok(Number.isFinite(Date.parse(JSON.parse(lines[0]).timestamp)));
+  });
 });

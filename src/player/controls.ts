@@ -53,12 +53,14 @@ export function togglePause(queue: GuildQueue): boolean {
 
 export function skipTrack(queue: GuildQueue): boolean {
   if (!queue.isPlaying() && !queue.node.isPaused()) return false;
+  if (queue.node.isPaused()) queue.node.resume();
   queue.node.skip();
   return true;
 }
 
 export async function backTrack(queue: GuildQueue): Promise<boolean> {
   if (!queue.history || queue.history.isEmpty()) return false;
+  if (queue.node.isPaused()) queue.node.resume();
   await queue.history.previous();
   return true;
 }
@@ -95,6 +97,7 @@ export function removeTrack(queue: GuildQueue, position: number): Track | null {
 export function skipTo(queue: GuildQueue, position: number): Track | null {
   const target = queue.tracks.at(position - 1) ?? null;
   if (!target) return null;
+  if (queue.node.isPaused()) queue.node.resume();
   if (!queue.node.skipTo(position - 1)) return null;
   return target;
 }

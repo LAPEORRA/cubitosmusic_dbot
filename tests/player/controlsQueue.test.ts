@@ -1,16 +1,23 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import type { GuildQueue } from 'discord-player';
-import { clearQueue, removeTrack, skipTo } from '../../src/player/controls.js';
+import { backTrack, clearQueue, removeTrack, skipTo, skipTrack } from '../../src/player/controls.js';
 
 interface FakeTrack {
   id: string;
   title: string;
 }
 
-function fakeQueue(titles: string[], acceptsSkip: (index: number) => boolean = () => true) {
+function fakeQueue(
+  titles: string[],
+  acceptsSkip: (index: number) => boolean = () => true,
+  initiallyPaused = false,
+  hasHistory = true,
+) {
   const store: FakeTrack[] = titles.map((title) => ({ id: title, title }));
   const skipCalls: number[] = [];
+  const events: string[] = [];
+  let paused = initiallyPaused;
 
   const tracks = {
     get size() {
@@ -30,16 +37,42 @@ function fakeQueue(titles: string[], acceptsSkip: (index: number) => boolean = (
   };
 
   const node = {
+    isPaused: () => paused,
+    pause: () => {
+      paused = true;
+      events.push('pause');
+    },
+    resume: () => {
+      paused = false;
+      events.push('resume');
+    },
+    skip: () => {
+      events.push('skip');
+    },
     skipTo: (index: number) => {
       skipCalls.push(index);
+      events.push(`skipTo:${index}`);
       return acceptsSkip(index);
     },
   };
 
+  const history = {
+    isEmpty: () => !hasHistory,
+    previous: async () => {
+      events.push('previous');
+    },
+  };
+
   return {
-    queue: { tracks, node } as unknown as GuildQueue,
+    queue: {
+      tracks,
+      node,
+      history,
+      isPlaying: () => !paused,
+    } as unknown as GuildQueue,
     store,
     skipCalls,
+    events,
   };
 }
 
@@ -100,4 +133,34 @@ test('skipTo devuelve null y no llama al player si la posición no existe', () =
   assert.equal(skipTo(queue, 3), null);
   assert.equal(skipTo(queue, 0), null);
   assert.deepEqual(skipCalls, []);
+});
+
+test('skipTrack reanuda antes de saltar cuando el player está en pausa', () => {
+  const { queue, events } = fakeQueue(['a', 'b'], () => true, true);
+  assert.equal(skipTrack(queue), true);
+  assert.deepEqual(events, ['resume', 'skip']);
+});
+
+test('skipTrack no reanuda si el player no está en pausa', () => {
+  const { queue, events } = fakeQueue(['a', 'b']);
+  assert.equal(skipTrack(queue), true);
+  assert.deepEqual(events, ['skip']);
+});
+
+test('skipTo reanuda antes de saltar cuando el player está en pausa', () => {
+  const { queue, events } = fakeQueue(['a', 'b'], () => true, true);
+  assert.equal(skipTo(queue, 2)?.title, 'b');
+  assert.deepEqual(events, ['resume', 'skipTo:1']);
+});
+
+test('backTrack reanuda antes de retroceder cuando el player está en pausa', async () => {
+  const { queue, events } = fakeQueue(['a'], () => true, true);
+  assert.equal(await backTrack(queue), true);
+  assert.deepEqual(events, ['resume', 'previous']);
+});
+
+test('backTrack no reanuda si no hay historial', async () => {
+  const { queue, events } = fakeQueue(['a'], () => true, true, false);
+  assert.equal(await backTrack(queue), false);
+  assert.deepEqual(events, []);
 });

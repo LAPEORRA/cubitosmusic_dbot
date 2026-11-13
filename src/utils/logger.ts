@@ -22,6 +22,62 @@ export const ANSI_COLORS = {
 
 export type LogColor = keyof typeof ANSI_COLORS;
 
+export interface SerializedError {
+  name: string;
+  message: string;
+  code: string | number | null;
+  stack: string | null;
+  cause: SerializedError | null;
+}
+
+export function serializeError(err: unknown): SerializedError {
+  const seen = new WeakSet<object>();
+
+  const serialize = (value: unknown): SerializedError => {
+    const isObject = (typeof value === 'object' && value !== null) || typeof value === 'function';
+    if (isObject && seen.has(value)) {
+      return { name: 'Error', message: '[Circular cause]', code: null, stack: null, cause: null };
+    }
+    if (isObject) seen.add(value);
+
+    const error = value instanceof Error ? value : null;
+    const record = isObject ? value as Record<string, unknown> : undefined;
+    const rawCode = record?.code;
+    const cause = error?.cause ?? record?.cause;
+
+    return {
+      name: error?.name ?? (typeof record?.name === 'string' ? record.name : 'Error'),
+      message: error?.message ?? (typeof record?.message === 'string' ? record.message : String(value)),
+      code: typeof rawCode === 'string' || typeof rawCode === 'number' ? rawCode : null,
+      stack: typeof error?.stack === 'string'
+        ? error.stack
+        : typeof record?.stack === 'string'
+          ? record.stack
+          : null,
+      cause: cause === undefined ? null : serialize(cause),
+    };
+  };
+
+  return serialize(err);
+}
+
+export type TraceCategory = 'cmd' | 'timing' | 'audio' | 'voice' | 'debug' | 'error';
+
+export function traceEvent(
+  category: TraceCategory,
+  event: string,
+  data: Record<string, unknown> = {},
+): void {
+  if (process.env.LIVE_TRACE !== 'true' && process.env.LOG_TO_FILE !== 'true') return;
+
+  const logDir = join(process.cwd(), 'logs');
+  mkdirSync(logDir, { recursive: true });
+  appendFileSync(
+    join(logDir, 'live-trace.jsonl'),
+    `${JSON.stringify({ timestamp: new Date().toISOString(), category, event, ...data })}\n`,
+  );
+}
+
 export function paint(color: LogColor, text: string): string {
   const codes: Record<LogColor, string> = {
     reset: ANSI_COLORS.reset,

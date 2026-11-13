@@ -226,6 +226,11 @@ await player.extractors.register(YouTubeDlpMixExtractor, {
 
 Los eventos estructurados incluyen timestamp, canal y un `playbackSessionId` estable durante la vida de la cola, útil para correlacionar una sesión en la consola. No incluyen usuario ni URL completa de las pistas.
 
+La telemetría pasiva adicional se escribe en `logs/live-trace.jsonl` cuando
+`LIVE_TRACE=true` o `LOG_TO_FILE=true`. Registra eventos internos de audio/voz/debug,
+errores serializados y tiempos de interacciones/extracción; puede incluir URLs para
+diagnóstico. No imprime en la TUI y `logs/` está excluido de Git.
+
 > No se usa `setFilters` ni ningún filtro ffmpeg aquí (ver gotchas CRÍTICOS abajo).
 
 ---

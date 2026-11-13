@@ -23,7 +23,7 @@ export async function nowplaying(interaction: any) {
     content: `🎵 **${currentTrack.title}** - ${currentTrack.author}\n` +
              `⏱ Progreso: ${progressBar} ${currentTrack.duration}\n` +
              `🔊 Volumen: ${queue.node.volume}%\n` +
-             `▶ ${queue.repeatMode ? 'Repitiendo' : 'No repeating'}`,
+             `▶ ${queue.repeatMode ? 'Repitiendo' : 'Sin repetición'}`,
     flags: 64,
   });
 }

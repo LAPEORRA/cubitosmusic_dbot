@@ -2,7 +2,7 @@ import { InteractionType } from 'discord.js';
 import type { Player } from 'discord-player';
 import { getCommand } from '../commands/index.js';
 import { handlePanelButton } from '../player/panel/panel-buttons.js';
-import { logRow } from '../utils/logger.js';
+import { logRow, traceEvent } from '../utils/logger.js';
 import { isInteractionConsumedError, replyWithError } from './interactionResponses.js';
 
 /** TTL para deduplicar entregas repetidas del mismo evento de Discord. */
@@ -64,17 +64,31 @@ export async function handleInteractionFailure(
  * - Slash commands -> registro tipado de `commands/index.ts` (sin `switch`).
  */
 export const interactionCreate = async (interaction: any, player: Player) => {
+  const receivedAt = performance.now();
+  const isButtonInteraction = interaction.type === InteractionType.MessageComponent
+    && interaction.isButton
+    && interaction.isButton();
+  if (isButtonInteraction) {
+    traceEvent('timing', 'button_received', {
+      interactionId: interaction.id,
+      customId: interaction.customId,
+      receivedAt,
+    });
+  } else if (interaction.type === InteractionType.ApplicationCommand) {
+    traceEvent('timing', 'command_received', {
+      interactionId: interaction.id,
+      commandName: interaction.commandName,
+      receivedAt,
+    });
+  }
+
   const interactionId = interaction.id as string | undefined;
   if (interactionId) {
     if (handledInteractions.has(interactionId)) return;
     markHandled(interactionId);
   }
 
-  if (
-    interaction.type === InteractionType.MessageComponent &&
-    interaction.isButton &&
-    interaction.isButton()
-  ) {
+  if (isButtonInteraction) {
     if (interaction.customId?.startsWith('panel_')) {
       try {
         await handlePanelButton(interaction);

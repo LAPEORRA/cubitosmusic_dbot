@@ -1,9 +1,14 @@
 import { ActionRowBuilder, ButtonBuilder, ButtonStyle, ComponentType, EmbedBuilder, Message } from 'discord.js';
 import { GuildQueue, Track } from 'discord-player';
+import { logRow } from '../../utils/logger.js';
 
 const panelMessages = new Map<string, Message>();
 const startedAtByGuild = new Map<string, Date>();
 const panelLocks = new Map<string, Promise<void>>();
+
+function errorText(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
+}
 
 export function getPanelMessage(guildId: string): Message | undefined {
   return panelMessages.get(guildId);
@@ -42,8 +47,8 @@ export function buildPanelEmbed(track: Track, queue: GuildQueue, startedAt: Date
   const requester = track.requestedBy?.username || fallbackRequestedBy || 'Desconocido';
 
   const commands = [
-    '→ `/play <url|búsqueda>` | `/pause`',
-    '→ `/skip` | `/stop` | `/loop` | `/shuffle`',
+    '→ `/play <url|búsqueda>` | `/pause` | `/skip` | `/skipto`',
+    '→ `/stop` | `/clear` | `/remove` | `/loop` | `/shuffle`',
     '→ `/queue` | `/nowplaying`',
   ].join('\n');
 
@@ -109,11 +114,19 @@ function withPanelLock(guildId: string, task: () => Promise<void>) {
   const prev = panelLocks.get(guildId) ?? Promise.resolve();
   const next = prev
     .catch((error) => {
-      console.error(`❌ Error en actualización previa del panel de guild ${guildId}:`, error);
+      logRow({
+        badge: 'ERROR',
+        color: 'red',
+        detail: `Error en actualización previa del panel (${guildId}): ${errorText(error)}`,
+      });
     })
     .then(task)
     .catch((error) => {
-      console.error(`❌ Error actualizando el panel de guild ${guildId}:`, error);
+      logRow({
+        badge: 'ERROR',
+        color: 'red',
+        detail: `Error actualizando el panel (${guildId}): ${errorText(error)}`,
+      });
     })
     .finally(() => {
       // Libera el lock cuando la cadena termina, salvo que ya exista una más reciente.
@@ -151,7 +164,12 @@ export async function updatePanel(channel: any, embed: EmbedBuilder, rows: Actio
       const message = await channel.send(payload);
       setPanelMessage(guildId, message);
     } catch (error) {
-      console.error('❌ Error enviando panel:', error);
+      logRow({
+        badge: 'ERROR',
+        color: 'red',
+        channel: channel?.name,
+        detail: `Error enviando panel: ${errorText(error)}`,
+      });
     }
   });
 }
@@ -185,7 +203,12 @@ export async function updateEmptyPanel(channel: any) {
       deletePanelMessage(guildId);
     } catch (error) {
       deletePanelMessage(guildId);
-      console.error('❌ Error actualizando el panel de cola vacía:', error);
+      logRow({
+        badge: 'ERROR',
+        color: 'red',
+        channel: channel?.name,
+        detail: `Error actualizando el panel de cola vacía: ${errorText(error)}`,
+      });
     }
   });
 }

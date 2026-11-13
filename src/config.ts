@@ -49,6 +49,12 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): BotConfig {
   const spotifyClientId = read(env, 'SPOTIFY_CLIENT_ID');
   const spotifyClientSecret = read(env, 'SPOTIFY_CLIENT_SECRET');
 
+  if (Boolean(spotifyClientId) !== Boolean(spotifyClientSecret)) {
+    throw new ConfigError(
+      'Configuración de Spotify incompleta: debes definir SPOTIFY_CLIENT_ID y SPOTIFY_CLIENT_SECRET juntos.',
+    );
+  }
+
   const spotify =
     spotifyClientId && spotifyClientSecret
       ? { clientId: spotifyClientId, clientSecret: spotifyClientSecret }

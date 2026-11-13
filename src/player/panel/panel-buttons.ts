@@ -18,7 +18,7 @@ import {
   updateEmptyPanel,
 } from './panel.js';
 import { buildQueueReply } from '../queueSummary.js';
-import { logRow } from '../../utils/logger.js';
+import { logRow, traceEvent } from '../../utils/logger.js';
 
 export async function handlePanelButton(
   interaction: any,
@@ -42,7 +42,16 @@ export async function handlePanelButton(
     });
   }
 
-  await interaction.deferUpdate();
+  const deferStartedAt = performance.now();
+  try {
+    await interaction.deferUpdate();
+  } finally {
+    traceEvent('timing', 'panel_defer_update', {
+      interactionId: interaction.id,
+      customId,
+      deferMs: performance.now() - deferStartedAt,
+    });
+  }
 
   const channel = (queue.metadata as any)?.channel;
 

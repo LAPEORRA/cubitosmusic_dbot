@@ -120,11 +120,13 @@ test('el panel muestra Desconocido sin solicitante ni fallback', () => {
   assert.equal(embedField(embed, '👤 Solicitada por'), 'Desconocido');
 });
 
-test('el panel no anuncia /resume en los comandos', () => {
+test('el panel no anuncia /resume y lista skipto, remove y clear', () => {
   const embed = buildPanelEmbed(fakeTrack(), fakeQueue(), new Date());
   const commands = embedField(embed, '🛠 Comandos') ?? '';
   assert.ok(!commands.includes('/resume'), `no debe mencionar /resume: ${commands}`);
-  assert.ok(commands.includes('`/play <url|búsqueda>` | `/pause`'));
+  assert.ok(commands.includes('`/play <url|búsqueda>` | `/pause` | `/skip` | `/skipto`'));
+  assert.ok(commands.includes('`/stop` | `/clear` | `/remove` | `/loop` | `/shuffle`'));
+  assert.ok(commands.includes('`/queue` | `/nowplaying`'));
 });
 
 test('buildPanelRows devuelve dos filas con los controles y los botones nuevos', () => {

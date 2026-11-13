@@ -1,3 +1,5 @@
+import { logRow } from '../utils/logger.js';
+
 type CompressorParametersLike = {
   threshold: number;
   ratio: number;
@@ -25,7 +27,11 @@ export function enableAudioPreset(queue: any): boolean {
     cache.compressor = COMPRESSOR_PRESET;
     return true;
   } catch (error) {
-    console.error('❌ No se pudo activar el preset de audio:', error);
+    logRow({
+      badge: 'ERROR',
+      color: 'red',
+      detail: `No se pudo activar el preset de audio: ${error instanceof Error ? error.message : String(error)}`,
+    });
     return false;
   }
 }

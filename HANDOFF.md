@@ -1,32 +1,33 @@
 # Handoff — CubitoMusic
 
-> Documento de traspaso de sesión: estado exacto del proyecto al **13-nov-2026** para retomar en una sesión fresca.
+> Documento de traspaso de sesión: estado del proyecto al **13-nov-2026** para retomar en una sesión fresca.
 
 ## Estado actual
 
 - **Carpeta activa:** `D:\cubitosmusic` (reubicado desde `D:\Proyectos_Opencode`).
-- **Git:** rama `main`. Working tree **limpio** tras dos commits atómicos:
-  1. `fix: limpieza de Maps en panel, manejo de queueDelete y sanitización de errores en /play`
-  2. `fix: deduplicación de interacciones, silencio de 10062/40060 y eliminación de ephemeral`
+- **Git:** rama `main`, `HEAD` en `d62343e`, **11 commits por delante** de `origin/main`. Hay **9 archivos modificados y 2 nuevos sin commit** (incluido este handoff); no hay cambios staged.
 - **Base previa:** `262cb79` (`feat: autodesconexión por inactividad y botones loop/shuffle en el panel`).
 - **Remoto:** `https://github.com/LAPEORRA/cubitosmusic_dbot.git` (`origin/main`). **Push pendiente** (decisión del usuario).
 
 ### Últimos commits
 ```
-fix: deduplicación de interacciones, silencio de 10062/40060 y eliminación de ephemeral
-fix: limpieza de Maps en panel, manejo de queueDelete y sanitización de errores en /play
+d62343e fix: sanitización multilínea en TUI, detalle de error por pista y feedback en /skipto
+8c1ac17 fix: deduplicación de interacciones, silencio de 10062/40060 y eliminación de ephemeral
+039f736 fix: limpieza de Maps en panel, manejo de queueDelete y sanitización de errores en /play
 262cb79 feat: autodesconexión por inactividad y botones loop/shuffle en el panel
 cd30a8c feat: comandos de gestión de cola clear, remove y skipto
 a864230 fix: solicitante por pista, guardia de canal en /play y correcciones en panel
 4a61ee6 fix: alineación final de la TUI, banner dinámico y logs de comandos/botones
 a3ebb8d docs: handoff para retomar la sesión actual
-2bad085 fix: consola TUI de logs con banner, colores por columna, ping y separador
+80e26bb fix: consola TUI de logs - banner, colores por columna, ping y separador
+2bad085 feat: consola TUI de logs con banner, tabla alineada y métricas de sistema
+a3c5687 refactor: reorganiza el proyecto para revisión en GitHub
 ```
 
 ## Verificación (todo en verde al cerrar)
 
 1. `npm run typecheck` → ✅ 0 errores (src + tests + scripts)
-2. `npm test` → ✅ **51/51 pass, 0 fail**
+2. `npm test` → ✅ **66/66 pass, 0 fail**
 3. `npm run build` → ✅ OK (tsc → `dist/`)
 
 > `deploy-commands` ya se ejecutó: **11 comandos** registrados en el guild (`play, skip, skipto, clear, remove, stop, queue, pause, loop, shuffle, nowplaying`). Solo re-desplegar si cambia la definición (`data`) de algún comando.
@@ -71,11 +72,21 @@ a3ebb8d docs: handoff para retomar la sesión actual
 - `replyWithError` ya no usa `console.error`: ignora 10062/40060 y para el resto escribe con `logRow`.
 - **`ephemeral` eliminado** de todos los `reply`/`followUp` de `panel-buttons.ts` (discord.js v14.27 emite `DeprecationWarning`); queda solo `flags: 64`.
 - El log `[BOTÓN]` se emite **después** de `await interaction.deferUpdate()`, así un fallo del defer no deja un log de acción antes del error. Cubierto por tests.
-- Tests: `tests/events/interactionCreate.test.ts` (dedupe y fallos), `tests/player/panelButtons.test.ts` (sin `ephemeral` y orden del log). Total **51**.
+- Tests de esa etapa: `tests/events/interactionCreate.test.ts` (dedupe y fallos), `tests/player/panelButtons.test.ts` (sin `ephemeral` y orden del log). El siguiente lote eleva el total a **66**.
+
+### 7. Pulido final (cambios locales sin commit; seis ajustes)
+- `controls.ts`: `skipTrack`, `skipTo` y `backTrack` reanudan el nodo antes de saltar o volver si estaba pausado.
+- `ready.ts`: los logs `tracks_queued` reciben resúmenes ligeros de pistas para mostrar correctamente el nombre de la playlist sin serializar `Track` completos; tras activar `audioPreset`, se fija el volumen base a 70.
+- `panel.ts` lista `/skip`, `/skipto`, `/clear` y `/remove`; `/nowplaying` usa «Sin repetición».
+- Errores de `panel.ts` y `audioPreset.ts` se registran con `logRow` en la TUI.
+- `config.ts` rechaza credenciales parciales de Spotify con `ConfigError`.
+- Tests nuevos/actualizados en `tests/config.test.ts`, `tests/events/ready.test.ts`, `tests/player/controlsQueue.test.ts` y `tests/player/panel.test.ts`.
+- Validación verificada: `npm run typecheck` ✅, `npm test` ✅ **66/66**, `npm run build` ✅.
+- No se modificaron en este lote `play.ts`, `youtubeDlpMix.ts` ni el registro de extractores en `index.ts`. No se hizo commit ni push.
 
 ## Pendientes / próximos pasos
 
-1. **`git push origin main`** (todo lo local, incluidos los commits de esta sesión).
+1. **Commit/push pendientes:** hay 11 commits locales sin publicar y el lote de la sección 7 aún sin commit. Esperar decisión explícita del usuario antes de publicar.
 2. **QA visual real** de la TUI en PowerShell con el bot vivo (`npm run dev`). Preview estático ya validado con `tsx`.
 3. **QA manual en Discord:** banner/logs, trazas `CMD`/`BOTÓN`, botones 🔁/🔀, `/clear`, `/remove`, `/skipto`, autodesconexión a los 5 min y ausencia de warnings `ephemeral`.
 4. **Bugs P0 restantes (no tocados):** panel congelado en casos borde, `/stop` que no desconecta, `/pause` toggle, `audioPreset` privado.

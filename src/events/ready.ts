@@ -3,10 +3,41 @@ import { Client } from 'discord.js';
 import type { GuildQueue, Player, Track } from 'discord-player';
 import { buildPanelEmbed, buildPanelRows, updatePanel, setStartedAt, getStartedAt, updateEmptyPanel } from '../player/panel/panel.js';
 import { enableAudioPreset } from '../player/audioPreset.js';
-import { getSystemMetrics, logRow, printStartupBanner, type LogColor } from '../utils/logger.js';
+import {
+  getSystemMetrics,
+  logRow,
+  printStartupBanner,
+  serializeError,
+  traceEvent,
+  type LogColor,
+} from '../utils/logger.js';
 
 const playbackSessionIds = new WeakMap<GuildQueue, string>();
 const queuedAtByTrack = new WeakMap<Track, number>();
+const tracedDispatchers = new WeakSet<object>();
+
+function traceQueueStateChanges(queue: GuildQueue): void {
+  const dispatcher = queue.dispatcher;
+  if (!dispatcher || tracedDispatchers.has(dispatcher)) return;
+  tracedDispatchers.add(dispatcher);
+
+  const guildId = queue.guild.id;
+  dispatcher.audioPlayer.on('stateChange', (from, to) => {
+    traceEvent('audio', 'state_change', {
+      guildId,
+      from: from.status.toLowerCase().replace(/-/g, ''),
+      to: to.status.toLowerCase().replace(/-/g, ''),
+    });
+  });
+
+  dispatcher.voiceConnection.on('stateChange', (from, to) => {
+    traceEvent('voice', 'state_change', {
+      guildId,
+      from: from.status.toLowerCase().replace(/-/g, ''),
+      to: to.status.toLowerCase().replace(/-/g, ''),
+    });
+  });
+}
 
 function getPlaybackSessionId(queue: GuildQueue): string {
   let sessionId = playbackSessionIds.get(queue);
@@ -27,6 +58,15 @@ function getTrackDetails(track: Track) {
   };
 }
 
+function getTraceTrackDetails(track?: Track | null) {
+  return {
+    title: track?.title ?? null,
+    url: track?.url ?? null,
+    source: track?.source ?? null,
+    extractor: track?.extractor?.identifier ?? null,
+  };
+}
+
 function getErrorDetails(error: unknown) {
   if (error instanceof Error) {
     return { errorName: error.name, errorMessage: error.message };
@@ -34,11 +74,22 @@ function getErrorDetails(error: unknown) {
   return { errorMessage: String(error) };
 }
 
-function logTracksQueued(queue: GuildQueue, tracks: Track[]) {
+export function logTracksQueued(queue: GuildQueue, tracks: Track[]) {
   const preview = tracks.slice(0, 5).map((track) => track.title);
   for (const track of tracks) queuedAtByTrack.set(track, performance.now());
 
+  // Resumen ligero: el switch necesita títulos/playlist, pero no queremos el Track
+  // completo en `rawJson` (objetos grandes y con referencias internas).
+  const summaries = tracks.map((track) => ({
+    title: track.title,
+    duration: track.duration,
+    playlist: track.playlist
+      ? { title: track.playlist.title, source: track.playlist.source }
+      : null,
+  }));
+
   logPlaybackEvent('tracks_queued', queue, {
+    tracks: summaries,
     tracksAdded: tracks.length,
     queueSize: queue.tracks.size,
     playlist: tracks[0]?.playlist
@@ -181,7 +232,27 @@ export const ready = async (client: Client, player: Player, guildId: string, spo
   player.events.on('queueCreate', (queue) => {
     const sessionId = getPlaybackSessionId(queue);
     const presetActive = enableAudioPreset(queue);
+    // El preset DSP puede reiniciar el nodo a 100% al cambiar de pista; fijamos la base.
+    if (typeof queue.node?.setVolume === 'function') queue.node.setVolume(70);
     logPlaybackEvent('queue_created', queue, { sessionId, presetActive }, client);
+
+    traceQueueStateChanges(queue);
+  });
+
+  player.events.on('connection', (queue) => traceQueueStateChanges(queue));
+  player.on('debug', (msg) => traceEvent('debug', 'player_debug', { msg }));
+  player.events.on('debug', (queue, msg) => {
+    traceEvent('debug', 'queue_debug', { guildId: queue.guild.id, msg });
+  });
+  player.events.on('playerFinish', (queue, track) => {
+    traceEvent('audio', 'track_finished', {
+      guildId: queue.guild.id,
+      title: track.title,
+      duration: track.duration,
+    });
+  });
+  player.events.on('disconnect', (queue) => {
+    traceEvent('voice', 'disconnected', { guildId: queue.guild.id });
   });
 
   player.events.on('audioTrackAdd', (queue, track) => logTracksQueued(queue, [track]));
@@ -192,6 +263,10 @@ export const ready = async (client: Client, player: Player, guildId: string, spo
   player.events.on('playerStart', (queue, track) => {
     const queuedAt = queuedAtByTrack.get(track);
     queuedAtByTrack.delete(track);
+    traceEvent('audio', 'track_started', {
+      guildId: queue.guild.id,
+      ...getTraceTrackDetails(track),
+    });
     logPlaybackEvent('playback_started', queue, {
       ...getTrackDetails(track),
       queuedForMs: queuedAt === undefined ? 0 : Math.round(performance.now() - queuedAt),
@@ -239,10 +314,20 @@ export const ready = async (client: Client, player: Player, guildId: string, spo
   });
 
   player.events.on('error', (queue, error) => {
+    traceEvent('error', 'queue_error', {
+      guildId: queue.guild.id,
+      error: serializeError(error),
+      ...getTraceTrackDetails(queue.currentTrack),
+    });
     logPlaybackEvent('player_error', queue, { error }, client);
   });
 
-  player.events.on('playerError', (queue, error) => {
+  player.events.on('playerError', (queue, error, track) => {
+    traceEvent('error', 'player_error', {
+      guildId: queue.guild.id,
+      error: serializeError(error),
+      ...getTraceTrackDetails(track),
+    });
     logPlaybackEvent('playback_error', queue, { error }, client);
   });
 };
