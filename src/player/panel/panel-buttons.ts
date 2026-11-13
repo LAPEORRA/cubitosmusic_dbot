@@ -8,10 +8,6 @@ import {
   requireSameVoiceChannel,
 } from '../controls.js';
 import {
-  buildPanelEmbed,
-  buildPanelRows,
-  getStartedAt,
-  updatePanel,
   updateEmptyPanel,
 } from './panel.js';
 import { buildQueueReply } from '../queueSummary.js';
@@ -80,11 +76,6 @@ export async function handlePanelButton(interaction: any) {
       return;
   }
 
-  // Re-render del panel con el estado actualizado
-  const current = queue.currentTrack;
-  if (current && channel) {
-    const embed = buildPanelEmbed(current, queue, getStartedAt(queue.guild.id), (queue.metadata as any)?.requestedBy?.username);
-    const rows = buildPanelRows(queue.node.isPaused());
-    await updatePanel(channel, embed, rows);
-  }
+  // El refresco visual lo hacen los eventos del player (`playerStart`/`playerPause`/`playerResume`
+  // en `ready.ts`); así evitamos doble edición del panel al pausar/reanudar.
 }

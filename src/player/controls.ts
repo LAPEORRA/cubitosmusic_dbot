@@ -26,6 +26,18 @@ export function requireSameVoiceChannel(interaction: InteractionLike, queue: Gui
   return isSameVoiceChannel(interaction.member?.voice?.channelId, queue.channel?.id);
 }
 
+/**
+ * El bot solo puede estar en un canal de voz: si aún no tiene cola/canal,
+ * se permite cualquier canal; si ya está conectado, debe coincidir.
+ */
+export function canPlayInChannel(
+  botChannelId: string | null | undefined,
+  userChannelId: string | null | undefined,
+): boolean {
+  if (!botChannelId) return true;
+  return botChannelId === userChannelId;
+}
+
 export function getQueue(interaction: InteractionLike): GuildQueue | null {
   return useQueue(interaction.guildId);
 }

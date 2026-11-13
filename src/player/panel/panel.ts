@@ -35,12 +35,13 @@ function timeAgo(date: Date): string {
   return `hace ${hours} h`;
 }
 
-export function buildPanelEmbed(track: Track, queue: GuildQueue, startedAt: Date, requestedBy?: string) {
+export function buildPanelEmbed(track: Track, queue: GuildQueue, startedAt: Date, fallbackRequestedBy?: string) {
   const progress = queue.node.createProgressBar({ timecodes: true });
-  const requester = requestedBy || (track.requestedBy?.username as string | undefined) || 'Desconocido';
+  // Prioridad: solicitante de la pista actual (una cola puede tener varios usuarios).
+  const requester = track.requestedBy?.username || fallbackRequestedBy || 'Desconocido';
 
   const commands = [
-    '→ `/play <url|búsqueda>` | `/pause` | `/resume`',
+    '→ `/play <url|búsqueda>` | `/pause`',
     '→ `/skip` | `/stop` | `/loop` | `/shuffle`',
     '→ `/queue` | `/nowplaying`',
   ].join('\n');

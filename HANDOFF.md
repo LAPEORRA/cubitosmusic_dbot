@@ -5,8 +5,9 @@
 ## Estado actual
 
 - **Carpeta activa del proyecto:** `D:\cubitosmusic` (el workspace ha sido reubicado desde `D:\Proyectos_Opencode`).
-- **Es un repositorio git:** rama `main`. Working tree con el cierre de la TUI **sin commitear** (3 ajustes + este handoff).
+- **Es un repositorio git:** rama `main`. TUI ya commiteada (`4a61ee6`); el bloque de **fixes P0 está aplicado y verificado, sin commitear**.
 - **Últimos commits:**
+  - `4a61ee6` — fix: alineación final de la TUI, banner dinámico y logs de comandos/botones
   - `a3ebb8d` — docs: handoff para retomar la sesión actual
   - `80e26bb` — fix: consola TUI de logs - banner, colores por columna, ping y separador
   - `2bad085` — feat: consola TUI de logs con banner, tabla alineada y métricas de sistema
@@ -16,7 +17,7 @@
 ## Verificación (todos en verde al último cambio)
 
 1. `npm run typecheck` → ✅ 0 errores (incluye `tsconfig.test.json`: src + tests + scripts)
-2. `npm test` → ✅ **23/23 pass, 0 fail**
+2. `npm test` → ✅ **29/29 pass, 0 fail**
 3. `npm run build` → ✅ OK (tsc → `dist/`)
 
 ## Qué se implementó en la fase de consola TUI (última tarea completada)
@@ -25,7 +26,7 @@
   - ANSI helpers (`ANSI_COLORS`, `paint`).
   - `formatLogTime` → `HH:MM:SS` (zona `America/Santiago`).
   - `getSystemMetrics(client?)` → `RAM X.XMB • Ping Xms` / fallback `calculando...` si ping es `-1`/`undefined`.
-  - `printStartupBanner(info)`: salto de línea (`console.log('')` si TTY) + recuadro Unicode + tabla con separador `'─'.repeat(108)`.
+  - `printStartupBanner(info)`: salto de línea (`console.log('')` si TTY) + recuadro Unicode de ancho dinámico + encabezado de tabla con separador derivado de las columnas.
   - `logRow({ badge, color, channel, detail, metrics, rawJson })`: columnas con colores propios (HORA gray, EVENTO badge color+bold, CANAL cyan, DETALLES normal, MÉTRICAS gray), detalle truncado a 50 chars + `…`, escritura opcional a `logs/playback.jsonl` si `LOG_TO_FILE=true`.
 - **`src/events/ready.ts`**:
   - Firma: `ready(client, player, guildId, spotifyEnabled = false)`.
@@ -40,6 +41,14 @@
   - Trazas de interacción: `interactionCreate` registra badge `CMD` (magenta, `Usuario /<comando>`); `handlePanelButton` registra `BOTÓN` (magenta, `Clic en <acción>`) antes del `switch`.
   - Tests nuevos de alineación: DETALLES a 52, MÉTRICAS en offset fijo, borde del banner alineado. Suite: **23 tests**.
 
+## Fixes P0 aplicados (última tarea, sin commitear)
+
+1. **Solicitante por pista** — `play.ts` pasa `requestedBy: interaction.user` como opción directa de `player.play()` (ya no dentro de `nodeOptions.metadata`, que solo se aplica al crear la cola) y refresca `requestedBy` en las pistas devueltas para cubrir la caché de búsquedas (5 h). `ready.ts` ya no lee el solicitante de `queue.metadata`; `buildPanelEmbed` prioriza `track.requestedBy?.username` y usa el fallback solo si falta.
+2. **Validación de canal en `/play`** — helper `canPlayInChannel(botChannelId, userChannelId)` en `controls.ts`; si el bot ya tiene cola en otro canal, `/play` responde pidiendo unirse a `<#canal>`.
+3. **Doble render del panel** — eliminado el `updatePanel` manual al final de `handlePanelButton`; el refresco queda solo en los eventos `playerStart`/`playerPause`/`playerResume` de `ready.ts` (`deferUpdate()` sigue ack-eando la interacción).
+4. **Texto del panel** — los comandos ya no mencionan `/resume` (`→ /play <url|búsqueda> | /pause`).
+5. **Tests:** +6 (prioridad de solicitante, fallback, Desconocido, sin `/resume`, guardia de canal). Suite: **29 tests**.
+
 ## Decisiones de diseño recientes
 
 - Consola sin dependencias externas: solo ANSI nativo + `node:fs`/`node:path`. Sin animaciones nuevas; `console.clear` sustituido por salto de línea para no cortar el banner en PowerShell.
@@ -50,7 +59,7 @@
 1. **QA visual real** en terminal de Windows/PowerShell con el bot en vivo (`npm run dev` desde `D:\cubitosmusic`). Preview estático del banner/tabla ya validado con `tsx`.
 2. **QA manual en Discord** del banner/logs + trazas `CMD`/`BOTÓN` (no se arrancó el bot tras el cambio).
 3. **Push pendiente:** `git push origin main` desde `D:\cubitosmusic`.
-4. **Bugs P0 conocidos (no tocados en refactor):** barra panel congelada, `/stop` que no desconecta, fuga de Maps, `/pause` toggle, errores crudos en `/play`, `audioPreset` privado.
+4. **Bugs P0 restantes (no tocados en este bloque):** panel congelado en casos borde, `/stop` que no desconecta, fuga de Maps, `/pause` toggle, errores crudos en `/play` más allá del canal, `audioPreset` privado. (Ya corregidos: solicitante por pista, canal de `/play`, doble render y texto `/resume`).
 5. **Pendiente de arquitectura:** panel dinámico con throttle/coalescing, TUI (log-update/chalk), presence, web dashboard.
 
 ## Archivos clave para retomar

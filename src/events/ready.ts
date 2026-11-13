@@ -197,7 +197,7 @@ export const ready = async (client: Client, player: Player, guildId: string, spo
     if (!channel) return;
 
     setStartedAt(queue.guild.id, new Date());
-    const embed = buildPanelEmbed(track, queue, getStartedAt(queue.guild.id), (queue.metadata as any)?.requestedBy?.username);
+    const embed = buildPanelEmbed(track, queue, getStartedAt(queue.guild.id));
     const rows = buildPanelRows(queue.node.isPaused());
     void updatePanel(channel, embed, rows);
   });
@@ -207,7 +207,7 @@ export const ready = async (client: Client, player: Player, guildId: string, spo
     const current = queue.currentTrack;
     if (!channel || !current) return;
     logPlaybackEvent('player_pause', queue, {}, client);
-    const embed = buildPanelEmbed(current, queue, getStartedAt(queue.guild.id), (queue.metadata as any)?.requestedBy?.username);
+    const embed = buildPanelEmbed(current, queue, getStartedAt(queue.guild.id));
     const rows = buildPanelRows(true);
     void updatePanel(channel, embed, rows);
   });
@@ -217,7 +217,7 @@ export const ready = async (client: Client, player: Player, guildId: string, spo
     const current = queue.currentTrack;
     if (!channel || !current) return;
     logPlaybackEvent('player_resume', queue, {}, client);
-    const embed = buildPanelEmbed(current, queue, getStartedAt(queue.guild.id), (queue.metadata as any)?.requestedBy?.username);
+    const embed = buildPanelEmbed(current, queue, getStartedAt(queue.guild.id));
     const rows = buildPanelRows(false);
     void updatePanel(channel, embed, rows);
   });

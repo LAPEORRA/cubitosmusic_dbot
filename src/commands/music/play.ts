@@ -1,6 +1,7 @@
 import { SlashCommandBuilder, GuildMember } from 'discord.js';
-import { Player } from 'discord-player';
+import { Player, useQueue } from 'discord-player';
 import { normalizeUrl } from '../../player/url.js';
+import { canPlayInChannel } from '../../player/controls.js';
 
 export const data = new SlashCommandBuilder()
   .setName('play')
@@ -36,6 +37,16 @@ export async function play(interaction: any, player: Player) {
     return interaction.editReply({ content: '❌ Necesitas estar en un canal de voz.', flags: 64 });
   }
 
+  // El bot solo puede reproducir en un canal: si ya tiene cola en otro, el usuario debe unirse.
+  const existingQueue = useQueue(interaction.guildId);
+  const botChannelId = existingQueue?.channel?.id ?? null;
+  if (!canPlayInChannel(botChannelId, voiceChannel.id)) {
+    return interaction.editReply({
+      content: `❌ Ya estoy reproduciendo en <#${botChannelId}>. Únete a ese canal para usar /play.`,
+      flags: 64,
+    });
+  }
+
   const channel = voiceChannel as any;
 
   try {
@@ -44,10 +55,11 @@ export async function play(interaction: any, player: Player) {
     const signal = AbortSignal.timeout(30_000);
 
     const result = await player.play(channel, normalized, {
+      requestedBy: interaction.user, // Metadatos por pista: cada canción conserva a su solicitante
       signal,
       searchEngine,
       nodeOptions: {
-        metadata: { channel: interaction.channel, requestedBy: interaction.user },
+        metadata: { channel: interaction.channel },
         leaveOnEmpty: false,    // No desconectar si la cola está vacía
         leaveOnEnd: false,      // No desconectar cuando termina la pista
         leaveOnStop: false,     // No desconectar al usar /stop
@@ -65,6 +77,12 @@ export async function play(interaction: any, player: Player) {
     if (!result.track) {
       await interaction.editReply({ content: '❌ Error: No se pudo obtener la pista de audio.', flags: 64 });
       return;
+    }
+
+    // La caché de búsquedas (5 h) puede reutilizar pistas con el solicitante anterior;
+    // refrescamos el usuario en todas las pistas recién encoladas.
+    for (const track of result.searchResult?.tracks ?? []) {
+      track.requestedBy = interaction.user;
     }
 
     await interaction.editReply({
