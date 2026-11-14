@@ -45,8 +45,37 @@ function isHttpUrl(value: unknown): value is string {
   return typeof value === 'string' && /^https?:\/\//i.test(value);
 }
 
+/**
+ * Texto del campo «⏱ Progreso» del panel.
+ *
+ * En vez de la barra ASCII se muestra la duración total y, al reproducir, una
+ * cuenta regresiva nativa de Discord (`<t:UNIX:R>`) calculada con el tiempo
+ * restante real. Al reanudar tras una pausa, `nowMs + remainingMs` vuelve a
+ * dar un fin correcto porque el timestamp se recalcula en cada render.
+ */
+export function formatPanelProgress(track: Track, queue: GuildQueue, nowMs: number = Date.now()): string {
+  const ts = queue.node?.getTimestamp?.();
+
+  if (queue.node?.isPaused?.()) {
+    return ts?.current?.label && ts?.total?.label
+      ? `⏸️ ${ts.current.label} / ${ts.total.label}`
+      : `⏸️ ${track.duration || '—'}`;
+  }
+
+  const totalMs = ts?.total?.value ?? track.durationMS ?? 0;
+  const currentMs = ts?.current?.value ?? 0;
+
+  if (totalMs > 0) {
+    const remainingMs = Math.max(0, totalMs - currentMs);
+    const endUnix = Math.floor((nowMs + remainingMs) / 1000);
+    return `${ts?.total?.label || track.duration} • termina <t:${endUnix}:R>`;
+  }
+
+  return track.duration || 'En vivo';
+}
+
 export function buildPanelEmbed(track: Track, queue: GuildQueue, startedAt: Date, fallbackRequestedBy?: string) {
-  const progress = queue.node.createProgressBar({ timecodes: true });
+  const progress = formatPanelProgress(track, queue);
   // Prioridad: solicitante de la pista actual (una cola puede tener varios usuarios).
   const requester = track.requestedBy?.username || fallbackRequestedBy || 'Desconocido';
 

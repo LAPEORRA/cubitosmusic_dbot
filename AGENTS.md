@@ -63,9 +63,10 @@ src/
 ├── config.ts                 — Validación tipada del entorno (BotConfig); aborta si falta algo obligatorio
 ├── commands/
 │   ├── index.ts              — Registro tipado (fuente única para router y deploy)
-│   └── music/                — Cada handler exporta `data` + run
-│       ├── play.ts           — /play <url|búsqueda> (único que llama a player.play)
-│       ├── skip.ts stop.ts queue.ts pause.ts loop.ts shuffle.ts nowplaying.ts
+│   ├── music/                — Cada handler exporta `data` + run
+│   │   ├── play.ts           — /play <url|búsqueda> (único que llama a player.play)
+│   │   ├── skip.ts stop.ts queue.ts pause.ts loop.ts shuffle.ts nowplaying.ts
+│   └── utility/help.ts       — /help dinámico (agrupa el registro por categoría)
 ├── events/
 │   ├── ready.ts              — Eventos del Player, logs JSON de reproducción y render del panel
 │   ├── interactionCreate.ts  — Router: customIds `panel_*` → handlePanelButton; ApplicationCommand → getCommand()
@@ -93,14 +94,17 @@ scripts/deploy-commands.ts    — Registro de comandos vía REST (usa el registr
 
 ## Flujos clave
 - **Control de reproducción**: `/pause`, `/skip`, `/stop`, `/loop`, `/shuffle` y los botones que modifican la reproducción solo funcionan desde el mismo canal de voz que el bot.
+- **`/stop`**: `stopQueue()` vacía la cola (`queue.tracks.clear()`), desconecta la voz y borra la cola; el comando captura `channel` antes del borrado para deshabilitar el panel.
+- **`/pause`**: alterna pausa/reanudación si existe `currentTrack` (también durante `buffering`), igual que el botón `panel_pause`.
+- **`/help`**: lista el registro (`src/commands/index.ts`) agrupado por `category`; usa import dinámico de `../index.js` para evitar el ciclo ESM y responde con `flags: 64`.
 - **`/play`**: `normalizeUrl` (en `src/player/url.ts`) → elige `searchEngine` por dominio (youtube.com → ytdlp, spotify.com → spotify, soundcloud.com → soundcloud, resto auto) → `player.play(channel, query, { requestedBy, signal: AbortSignal.timeout(30_000), searchEngine, nodeOptions })`. `nodeOptions`: `metadata {channel}`, `leaveOnEmpty/leaveOnEnd: true` con `*Cooldown: 300_000` (auto-desconexión tras 5 min), `leaveOnStop: false`, `verifyFallbackStream: true`, `volume: 70` (única anti-saturación). `requestedBy` va a nivel de pista, no en `metadata`.
-- **Panel**: los eventos de `playerStart`/pause/resume en `ready.ts` re-renderizan el embed en el canal de `queue.metadata.channel`. Estado por guild en Maps de `panel.ts` (`panelMessages`, `startedAtByGuild`, `panelLocks` — serializa ediciones). Si el mensaje ya no es editable, `updatePanel` lo borra y crea uno nuevo. `emptyQueue`/`queueDelete`/stop → `updateEmptyPanel` (botones deshabilitados) y `deletePanelMessage` libera los tres Maps para que no crezcan indefinidamente.
+- **Panel**: los eventos de `playerStart`/pause/resume en `ready.ts` re-renderizan el embed en el canal de `queue.metadata.channel`. El campo `⏱ Progreso` usa `formatPanelProgress()` (duración + cuenta regresiva `<t:UNIX:R>` al reproducir, timecodes congelados en pausa; `/nowplaying` conserva la barra ASCII). Estado por guild en Maps de `panel.ts` (`panelMessages`, `startedAtByGuild`, `panelLocks` — serializa ediciones). Si el mensaje ya no es editable, `updatePanel` lo borra y crea uno nuevo. `emptyQueue`/`queueDelete`/stop → `updateEmptyPanel` (botones deshabilitados) y `deletePanelMessage` libera los tres Maps para que no crezcan indefinidamente.
 - **Botones**: contrato de ruteo = customIds `panel_back`, `panel_pause`, `panel_skip`, `panel_stop`, `panel_queue`, `panel_loop`, `panel_shuffle`. Nuevos botones deben seguir ese prefijo `panel_`.
 
 ## Gotchas críticos (reproducción — leer antes de tocar nada)
 1. **NO `queue.filters.ffmpeg.setFilters(...)`**: el stream de YouTubeDlpExtractor viene en `$fmt: 'raw'` (PCM) y el FFmpegFilterer lanza su propio ffmpeg que muere → `write EPIPE` → la pista se corta ~2s y se vacía la cola. `setFilters` además dispara `triggerReplay()` (re-elige la pista), así que no se llama ni desde `playerStart`.
 2. **`agent: { autoCookiesFromBrowser: false }` SIEMPRE** al registrar el extractor (si no, intenta leer cookies de Chrome y rompe el stream).
-3. **`leaveOn*`**: `leaveOnEmpty`/`leaveOnEnd` están en `true` con cooldown de 300000 ms (5 min); `leaveOnStop` sigue en `false` porque `/stop` ya gestiona la desconexión.
+3. **`leaveOn*`**: `leaveOnEmpty`/`leaveOnEnd` están en `true` con cooldown de 300000 ms (5 min); `leaveOnStop` sigue en `false` porque `/stop` ya gestiona la desconexión. `stopQueue()` vacía `tracks` y desconecta antes de `queue.delete()` para evitar extracciones durante el desmontaje.
 4. **Binarios**: `yt-dlp.exe` lo descarga `ytdlp-nodejs` en postinstall (requiere `allowScripts` o `npm approve-scripts`), `ffmpeg` lo da `ffmpeg-static`. Se auto-localizan; `setFFmpegPath`/`setYtDlpPath` solo si hay problemas.
 5. **ESM**: imports locales con extensión `.js` (`from './foo.js'`). tsconfig: target ESNext, module NodeNext, strict.
 

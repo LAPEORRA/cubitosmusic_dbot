@@ -5,33 +5,33 @@
 ## Estado actual
 
 - **Carpeta activa:** `D:\cubitosmusic` (reubicado desde `D:\Proyectos_Opencode`).
-- **Git:** rama `main`, `HEAD` en `1b51762` (`chore(telemetry): trazas live-trace, deduplicación de errores y ritual de contexto`), árbol de trabajo limpio y **sincronizado con `origin/main`** tras el push del 14-nov-2026. El lote de telemetría y ritual (`.gitignore`, `AGENTS.md`, `HANDOFF.md`, `package.json`, `src/events/ready.ts`, `tests/events/ready.test.ts` y `.github/copilot-instructions.md`) quedó cerrado y publicado.
-- **Base previa:** `c425d21` (`fix: reanudar audio antes de saltar, corregir logs de playlists y validar Spotify parcial`).
+- **Git:** rama `main`, `HEAD` en `4844cc3` (`fix(player): vacía la cola antes de desconectar en /stop`), **sincronizado con `origin/main`** y con cambios locales sin commit: `src/player/panel/panel.ts`, `tests/player/panel.test.ts`, `AGENTS.md` y `HANDOFF.md` (bloque 16). Incluye los bloques 12–15: panel reactivo y presencia, P0 de stop/panel/preset, `/pause` + `/help` y el vaciado de cola en `stopQueue`.
+- **Base previa:** `158d410` (`feat(commands): añade /help dinámico y unifica la validación de /pause`).
 - **Remoto:** `https://github.com/LAPEORRA/cubitosmusic_dbot.git` (`origin/main`).
 
 ### Últimos commits
 ```
+4844cc3 fix(player): vacía la cola antes de desconectar en /stop
+158d410 feat(commands): añade /help dinámico y unifica la validación de /pause
+968545b fix(player): cierra P0 de stop, panel y audioPreset; presencia en pausa
+93e4ce2 feat(panel): botones reactivos al estado de cola y presencia dinámica
+a0753d2 docs: sincroniza HANDOFF con el commit de telemetria publicado
+1b51762 chore(telemetry): trazas live-trace, deduplicación de errores y ritual de contexto
 c425d21 fix: reanudar audio antes de saltar, corregir logs de playlists y validar Spotify parcial
 d62343e fix: sanitización multilínea en TUI, detalle de error por pista y feedback en /skipto
 8c1ac17 fix: deduplicación de interacciones, silencio de 10062/40060 y eliminación de ephemeral
 039f736 fix: limpieza de Maps en panel, manejo de queueDelete y sanitización de errores en /play
 262cb79 feat: autodesconexión por inactividad y botones loop/shuffle en el panel
 cd30a8c feat: comandos de gestión de cola clear, remove y skipto
-a864230 fix: solicitante por pista, guardia de canal en /play y correcciones en panel
-4a61ee6 fix: alineación final de la TUI, banner dinámico y logs de comandos/botones
-a3ebb8d docs: handoff para retomar la sesión actual
-80e26bb fix: consola TUI de logs - banner, colores por columna, ping y separador
-2bad085 feat: consola TUI de logs con banner, tabla alineada y métricas de sistema
-a3c5687 refactor: reorganiza el proyecto para revisión en GitHub
 ```
 
 ## Verificación (todo en verde al cerrar)
 
 1. `npm run typecheck` → ✅ 0 errores (src + tests + scripts)
-2. `npm test` → ✅ **90/90 pass, 0 fail** (telemetría, panel reactivo, presencia, P0 cerrados y `/help`)
+2. `npm test` → ✅ **97/97 pass, 0 fail** (telemetría, panel reactivo, presencia, P0 cerrados, `/help` y cuenta regresiva del panel)
 3. `npm run build` → ✅ OK (tsc → `dist/`)
 
-> `deploy-commands` se ejecutó con **11 comandos**; con `/help` el registro pasa a **12**. **Ejecutar `npm run deploy-commands`** para publicar `/help` en el guild.
+> `deploy-commands` ejecutado: **12 comandos** registrados en el guild, incluido `/help`. Solo re-desplegar si cambia la definición (`data`) de algún comando.
 
 ## Trabajo completado (cronológico)
 
@@ -112,7 +112,7 @@ a3c5687 refactor: reorganiza el proyecto para revisión en GitHub
 - `src/events/ready.ts`: el estado de cola se propaga en `playerStart`/`playerPause`/`playerResume`; presencia con `ActivityType.Listening` al reproducir/reanudar, `ActivityType.Custom` (`⏸️ <título>`) en pausa y `setActivity()` al vaciar o borrar la cola.
 - `src/player/panel/panel-buttons.ts`: el refresco de `panel_loop`/`panel_shuffle` también pasa `getPanelRowState(queue)`.
 - Tests: `tests/player/panel.test.ts` (deshabilitado/habilitado, estado parcial, retrocompatibilidad y helper) y `tests/events/ready.test.ts` (presencia en play/pause/resume y limpieza). Total **77/77**.
-- Zonas congeladas intactas (`play.ts`, `youtubeDlpMix.ts`, registro de extractores en `index.ts`). Cerrado en el commit `93e4ce2`; **sin push**.
+- Zonas congeladas intactas (`play.ts`, `youtubeDlpMix.ts`, registro de extractores en `index.ts`). Cerrado en el commit `93e4ce2` y publicado en `origin/main` (`158d410`).
 
 ### 13. Cierre de P0 y presencia `Custom` (OpenCode, 14-nov-2026)
 - **Presencia en pausa:** `ActivityType.Custom` ahora envía el texto en `state` (`{ name: 'Estado', type: Custom, state: '⏸️ <título>' }`) para que Discord lo renderice; test actualizado.
@@ -120,27 +120,35 @@ a3c5687 refactor: reorganiza el proyecto para revisión en GitHub
 - **Panel en casos borde:** `buildPanelEmbed` solo aplica `.setURL()`/`.setThumbnail()` con `http(s)` válidas (evita que `EmbedBuilder` lance y congele el panel). `audioTrackAdd`/`audioTracksAdd` refrescan el panel con `currentTrack` activo, actualizando el contador y habilitando 🔀/📋 al instante.
 - **`audioPreset`:** se eliminó la mutación de `filters._lastFiltersCache`; `enableAudioPreset(queue)` solo valida `queue?.node` y devuelve `true`/`false`, sin tocar `ffmpeg.setFilters`. **Nota:** el preset DSP por la vía privada ya no se aplica; queda como validación hasta definir una vía pública.
 - Tests nuevos/actualizados: `tests/player/audioPreset.test.ts` (nuevo), `tests/player/controlsQueue.test.ts` (desconexión), `tests/player/panel.test.ts` (URLs inválidas), `tests/events/ready.test.ts` (presencia `state` y refresco al encolar). Total **85/85**.
-- Verificación: `npm run typecheck` ✅, `npm test` ✅ **85/85**, `npm run build` ✅. Cerrado en el commit `968545b`; sin push.
+- Verificación: `npm run typecheck` ✅, `npm test` ✅ **85/85**, `npm run build` ✅. Cerrado en el commit `968545b` y publicado en `origin/main` (`158d410`).
 
 ### 14. P0 de `/pause` y comando `/help` (OpenCode, 14-nov-2026)
 - `src/commands/music/pause.ts`: condición alineada con `panel_pause` (`!queue || !queue.currentTrack`), por lo que se puede pausar/reanudar durante transiciones (`buffering`); resolvedor de cola inyectable para tests (mismo patrón que `handlePanelButton`).
 - Nuevo `src/commands/utility/help.ts`: embed `0x5865f2` con footer `CubitoMusic`; comandos agrupados por categoría (`music` → 🎵 Música, `utility` → 🛠️ Utilidades, fallback capitalizado); import dinámico de `../index.js` para evitar el ciclo ESM; respuesta con `flags: 64`.
 - Registro: `/help` añadido en `src/commands/index.ts` (`category: 'utility'`, `help: 'Muestra esta lista de comandos.'`).
 - Tests: `tests/commands/pauseCommand.test.ts` (buffering, reanudar y sin pista) y `tests/commands/helpCommand.test.ts` (grupos, color/footer, `flags: 64` y cobertura de todos los comandos). Total **90/90**.
-- Verificación: `npm run typecheck` ✅, `npm test` ✅ **90/90**, `npm run build` ✅. **P0 pendientes: ninguno.** Sin commit ni push.
-- **Acción requerida:** `npm run deploy-commands` para registrar `/help` (pasa de 11 a 12 comandos).
+- Verificación: `npm run typecheck` ✅, `npm test` ✅ **90/90**, `npm run build` ✅. **P0 pendientes: ninguno.** Cerrado en el commit `158d410` y publicado en `origin/main`.
+- **Despliegue:** `npm run deploy-commands` ejecutado: **12 comandos** registrados, incluido `/help`.
 
 ### 15. Micro-optimización del desmontaje en `/stop` (OpenCode, 14-nov-2026)
 - `src/player/controls.ts`: `stopQueue()` ejecuta `queue.tracks.clear()` antes de `queue.connection?.disconnect()` y `queue.delete()`, evitando que `discord-player` intente resolver o extraer la siguiente pista durante el desmontaje.
 - `tests/player/controlsQueue.test.ts`: el test de stop ahora verifica el orden `['clear', 'disconnect', 'delete']` y que la cola queda vacía; el caso sin conexión espera `['clear', 'delete']`.
-- Verificación: `npm run typecheck` ✅, `npm test` ✅ **90/90** (misma cantidad de tests, aserciones ampliadas), `npm run build` ✅. Sin commit ni push.
+- Verificación: `npm run typecheck` ✅, `npm test` ✅ **90/90** (misma cantidad de tests, aserciones ampliadas), `npm run build` ✅. Cerrado en el commit `4844cc3` y publicado en `origin/main`.
+
+### 16. Cuenta regresiva nativa en el panel (OpenCode, 14-nov-2026)
+- `src/player/panel/panel.ts`: nueva función pura `formatPanelProgress(track, queue, nowMs = Date.now())` que reemplaza la barra ASCII del embed.
+  - **Pausado** (`queue.node.isPaused()`): `⏸️ MM:SS / MM:SS` con los timecodes de `getTimestamp()`; si no hay timestamp, `⏸️ <duración>`.
+  - **Reproduciendo**: `totalMs = ts.total.value ?? track.durationMS ?? 0`; si `totalMs > 0`, calcula `remainingMs = max(0, totalMs - currentMs)` y `endUnix = floor((nowMs + remainingMs) / 1000)` → `<total.label> • termina <t:endUnix:R>`. Al reanudar (`playerResume`), el timestamp se recalcula con el restante real.
+  - **Sin duración** (streams en vivo): `track.duration || 'En vivo'`.
+- `buildPanelEmbed` usa `formatPanelProgress(track, queue)` como valor de `⏱ Progreso`. `src/commands/music/nowplaying.ts` queda intacto (conserva la barra visual bajo demanda).
+- Tests en `tests/player/panel.test.ts`: helper `fakeTimedQueue`, reproducción normal, reanudación con progreso parcial (`nowMs + (totalMs - currentMs)`), pausa con y sin timestamp, fallback sin timestamp, stream en vivo (`durationMS: 0`) y campo del embed sin barra ASCII. Total **97/97**.
+- Verificación: `npm run typecheck` ✅, `npm test` ✅ **97/97**, `npm run build` ✅. Zonas congeladas intactas (`play.ts`, `youtubeDlpMix.ts`, registro de extractores en `index.ts` y `/nowplaying`). Cambios locales sin commit.
 
 ## Pendientes / próximos pasos
 
-1. **Ejecutar `npm run deploy-commands`** para publicar `/help` (12 comandos en el guild).
-2. **QA visual real** de la TUI en PowerShell con el bot vivo (`npm run dev`). Preview estático ya validado con `tsx`.
-3. **QA manual en Discord:** banner/logs, trazas `CMD`/`BOTÓN`, botones 🔁/🔀, `/clear`, `/remove`, `/skipto`, `/help`, pausa durante buffering, autodesconexión a los 5 min y ausencia de warnings `ephemeral`.
-4. **Arquitectura pendiente:** panel dinámico con throttle/coalescing, TUI avanzada (`log-update`/chalk), web dashboard.
+1. **QA visual real** de la TUI en PowerShell con el bot vivo (`npm run dev`). Preview estático ya validado con `tsx`.
+2. **QA manual en Discord:** banner/logs, trazas `CMD`/`BOTÓN`, botones 🔁/🔀, `/clear`, `/remove`, `/skipto`, `/help`, pausa durante buffering, autodesconexión a los 5 min y ausencia de warnings `ephemeral`. Validar además la cuenta regresiva `<t:…:R>` del panel (reproducir, pausar, reanudar y dejar terminar una pista).
+3. **Arquitectura pendiente:** panel dinámico con throttle/coalescing, TUI avanzada (`log-update`/chalk), web dashboard.
 
 ## Archivos clave
 

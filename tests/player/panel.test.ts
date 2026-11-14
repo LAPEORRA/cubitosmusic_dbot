@@ -12,6 +12,7 @@ import type { GuildQueue, Track } from 'discord-player';
 import {
   buildPanelEmbed,
   buildPanelRows,
+  formatPanelProgress,
   getPanelMessage,
   getPanelRowState,
   setPanelMessage,
@@ -23,6 +24,25 @@ import { handlePanelButton } from '../../src/player/panel/panel-buttons.js';
 function fakeQueue(volume = 70): GuildQueue {
   return {
     node: { createProgressBar: () => '0:00 / 3:00', volume },
+    tracks: { data: [] },
+  } as unknown as GuildQueue;
+}
+
+type FakeTimestamp = {
+  current: { label: string; value: number };
+  total: { label: string; value: number };
+};
+
+function fakeTimedQueue(options: {
+  paused?: boolean;
+  timestamp?: FakeTimestamp | null;
+}, volume = 70): GuildQueue {
+  return {
+    node: {
+      isPaused: () => options.paused ?? false,
+      getTimestamp: () => options.timestamp ?? null,
+      volume,
+    },
     tracks: { data: [] },
   } as unknown as GuildQueue;
 }
@@ -161,6 +181,74 @@ test('el panel conserva URL y miniatura http(s) válidas', () => {
 
   assert.equal(embed.data.url, 'https://example.com/track');
   assert.equal(embed.data.thumbnail?.url, 'https://example.com/thumb.jpg');
+});
+
+test('formatPanelProgress al reproducir muestra la duración y la cuenta regresiva nativa', () => {
+  const nowMs = 1_700_000_000_000;
+  const queue = fakeTimedQueue({
+    // Prioriza el label del timestamp sobre `track.duration` ('3:45').
+    timestamp: { current: { label: '1:00', value: 60_000 }, total: { label: '4:00', value: 240_000 } },
+  });
+
+  const progress = formatPanelProgress(fakeTrack(), queue, nowMs);
+  const endUnix = Math.floor((nowMs + 180_000) / 1000);
+
+  assert.equal(progress, `4:00 • termina <t:${endUnix}:R>`);
+  assert.ok(!progress.includes('/'), 'no debe conservar la barra ASCII');
+});
+
+test('formatPanelProgress al reanudar tras progreso parcial calcula el fin real restante', () => {
+  const nowMs = 1_700_000_123_456;
+  const queue = fakeTimedQueue({
+    timestamp: { current: { label: '2:14', value: 134_000 }, total: { label: '5:00', value: 300_000 } },
+  });
+
+  const progress = formatPanelProgress(fakeTrack(), queue, nowMs);
+  const expectedEndUnix = Math.floor((nowMs + (300_000 - 134_000)) / 1000);
+
+  assert.equal(progress, `5:00 • termina <t:${expectedEndUnix}:R>`);
+  // El fin debe ser `nowMs + restante`, no `nowMs + duración total`.
+  assert.ok(!progress.includes(`<t:${Math.floor((nowMs + 300_000) / 1000)}:R>`));
+});
+
+test('formatPanelProgress en pausa congela el tiempo con los timecodes actuales', () => {
+  const queue = fakeTimedQueue({
+    paused: true,
+    timestamp: { current: { label: '1:20', value: 80_000 }, total: { label: '3:45', value: 225_000 } },
+  });
+
+  assert.equal(formatPanelProgress(fakeTrack(), queue, 1_700_000_000_000), '⏸️ 1:20 / 3:45');
+});
+
+test('formatPanelProgress en pausa sin timestamp cae a la duración de la pista', () => {
+  const queue = fakeTimedQueue({ paused: true, timestamp: null });
+
+  assert.equal(formatPanelProgress(fakeTrack(), queue), '⏸️ 3:45');
+});
+
+test('formatPanelProgress sin timestamp usa la duración de la pista', () => {
+  const queue = fakeTimedQueue({ timestamp: null });
+
+  assert.equal(formatPanelProgress(fakeTrack(), queue), '3:45');
+});
+
+test('formatPanelProgress en stream en vivo sin duración devuelve En vivo', () => {
+  const track = { ...fakeTrack(), duration: '', durationMS: 0 } as unknown as Track;
+  const queue = fakeTimedQueue({ timestamp: null });
+
+  assert.equal(formatPanelProgress(track, queue), 'En vivo');
+});
+
+test('el campo ⏱ Progreso del panel usa formatPanelProgress y no la barra ASCII', () => {
+  const queue = fakeTimedQueue({
+    timestamp: { current: { label: '0:10', value: 10_000 }, total: { label: '3:00', value: 180_000 } },
+  });
+
+  const embed = buildPanelEmbed(fakeTrack(), queue, new Date());
+  const progress = embedField(embed, '⏱ Progreso') ?? '';
+
+  assert.match(progress, /^3:00 • termina <t:\d+:R>$/, progress);
+  assert.ok(!progress.includes('/'), `no debe usar la barra ASCII: ${progress}`);
 });
 
 test('buildPanelRows devuelve dos filas con los controles y los botones nuevos', () => {
