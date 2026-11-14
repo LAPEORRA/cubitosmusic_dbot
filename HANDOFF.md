@@ -5,9 +5,9 @@
 ## Estado actual
 
 - **Carpeta activa:** `D:\cubitosmusic` (reubicado desde `D:\Proyectos_Opencode`).
-- **Git:** rama `main`, `HEAD` en `c425d21`, sincronizada con `origin/main` al último `git fetch`. El lote local (`.gitignore`, `AGENTS.md`, `HANDOFF.md`, `package.json`, `src/events/ready.ts`, `tests/events/ready.test.ts` y el nuevo `.github/copilot-instructions.md`) fue **revisado y está listo para cierre**; se agrupa en el commit `chore(telemetry): trazas live-trace, deduplicación de errores y ritual de contexto`. **Push pendiente** de autorización.
-- **Base previa:** `262cb79` (`feat: autodesconexión por inactividad y botones loop/shuffle en el panel`).
-- **Remoto:** `https://github.com/LAPEORRA/cubitosmusic_dbot.git` (`origin/main`). El commit `c425d21` ya está publicado; los cambios listados arriba siguen locales.
+- **Git:** rama `main`, `HEAD` en `1b51762` (`chore(telemetry): trazas live-trace, deduplicación de errores y ritual de contexto`), árbol de trabajo limpio y **sincronizado con `origin/main`** tras el push del 14-nov-2026. El lote de telemetría y ritual (`.gitignore`, `AGENTS.md`, `HANDOFF.md`, `package.json`, `src/events/ready.ts`, `tests/events/ready.test.ts` y `.github/copilot-instructions.md`) quedó cerrado y publicado.
+- **Base previa:** `c425d21` (`fix: reanudar audio antes de saltar, corregir logs de playlists y validar Spotify parcial`).
+- **Remoto:** `https://github.com/LAPEORRA/cubitosmusic_dbot.git` (`origin/main`).
 
 ### Últimos commits
 ```
@@ -100,16 +100,19 @@ a3c5687 refactor: reorganiza el proyecto para revisión en GitHub
 ### 10. Cierre del lote de telemetría y ritual (OpenCode, 14-nov-2026)
 - `package.json`: `npm run context` incluye además `AGENTS.md` y `HANDOFF.md` cuando existen en la raíz (junto a `package.json` y `src/`); `contexto_bot.txt` sigue ignorado por Git.
 - `src/events/ready.ts` + `tests/events/ready.test.ts`: deduplicación de errores por 2 s, filtro de debug `[NW]` y pruebas de `LIVE_TRACE` (ver sección 8).
-- Cambios locales revisados y listos para cierre. Se agrupan en el commit `chore(telemetry): trazas live-trace, deduplicación de errores y ritual de contexto`; **sin push**.
+- Cambios cerrados en el commit `1b51762` y **publicados** en `origin/main` el 14-nov-2026.
 - Verificación: `npm run context` ✅ (30 archivos), `npm run typecheck` ✅, `npm test` ✅ **71/71**, `npm run build` ✅.
+
+### 11. Retoma de sesión (OpenCode, 14-nov-2026)
+- Reconciliado `HANDOFF.md` con el estado real: el commit `1b51762` ya estaba creado y el árbol limpio; se publicó junto con esta corrección documental.
+- Verificación en la retoma: `npm run typecheck` ✅, `npm test` ✅ **71/71**, `npm run build` ✅.
 
 ## Pendientes / próximos pasos
 
-1. **Push pendiente:** el lote local revisado se cierra en `chore(telemetry): trazas live-trace, deduplicación de errores y ritual de contexto`; publicar solo cuando Santiago lo autorice.
-2. **QA visual real** de la TUI en PowerShell con el bot vivo (`npm run dev`). Preview estático ya validado con `tsx`.
-3. **QA manual en Discord:** banner/logs, trazas `CMD`/`BOTÓN`, botones 🔁/🔀, `/clear`, `/remove`, `/skipto`, autodesconexión a los 5 min y ausencia de warnings `ephemeral`.
-4. **Bugs P0 restantes (no tocados):** panel congelado en casos borde, `/stop` que no desconecta, `/pause` toggle, `audioPreset` privado.
-5. **Arquitectura pendiente:** panel dinámico con throttle/coalescing, TUI avanzada (`log-update`/chalk), presence, web dashboard.
+1. **QA visual real** de la TUI en PowerShell con el bot vivo (`npm run dev`). Preview estático ya validado con `tsx`.
+2. **QA manual en Discord:** banner/logs, trazas `CMD`/`BOTÓN`, botones 🔁/🔀, `/clear`, `/remove`, `/skipto`, autodesconexión a los 5 min y ausencia de warnings `ephemeral`.
+3. **Bugs P0 restantes (no tocados):** panel congelado en casos borde, `/stop` que no desconecta, `/pause` toggle, `audioPreset` privado.
+4. **Arquitectura pendiente:** panel dinámico con throttle/coalescing, TUI avanzada (`log-update`/chalk), presence, web dashboard.
 
 ## Archivos clave
 
