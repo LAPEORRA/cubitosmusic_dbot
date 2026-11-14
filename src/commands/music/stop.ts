@@ -20,8 +20,9 @@ export async function stop(interaction: any) {
     return interaction.reply({ content: '❌ Debes estar en el mismo canal de voz que el bot.', flags: 64 });
   }
 
-  await stopQueue(queue);
+  // Capturado antes del borrado: `queue.delete()` limpia `queue.metadata`.
   const channel = (queue.metadata as any)?.channel as any;
+  await stopQueue(queue);
   await updateEmptyPanel(channel);
   await interaction.reply({ content: '⏹️ Música detenida y bot desconectado.', flags: 64 });
 }

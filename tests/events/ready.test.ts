@@ -229,8 +229,88 @@ test('actualiza la presencia al reproducir, pausar y reanudar, y la limpia al ce
 
   assert.equal(activityCalls.length, 5);
   assert.deepEqual(activityCalls[0], ['One More Time', { type: ActivityType.Listening }]);
-  assert.deepEqual(activityCalls[1], ['⏸️ One More Time', { type: ActivityType.Custom }]);
+  assert.deepEqual(activityCalls[1], [{ name: 'Estado', type: ActivityType.Custom, state: '⏸️ One More Time' }]);
   assert.deepEqual(activityCalls[2], ['One More Time', { type: ActivityType.Listening }]);
   assert.deepEqual(activityCalls[3], []);
   assert.deepEqual(activityCalls[4], []);
+});
+
+test('refresca el panel al encolar pistas con reproducción activa', async () => {
+  const originalLog = console.log;
+  const events = new EventEmitter();
+  events.setMaxListeners(0);
+  const player = Object.assign(new EventEmitter(), {
+    events,
+    extractors: { store: { size: 0 } },
+  }) as unknown as Player;
+
+  const client = {
+    guilds: { fetch: async () => ({ name: 'Servidor de prueba' }) },
+    user: { tag: 'CubitoMusic#0000', setActivity: () => {} },
+    ws: { ping: 42 },
+  } as unknown as Client;
+
+  const guildId = `guild-live-panel-${Date.now()}`;
+  const payloads: any[] = [];
+  const message = {
+    editable: true,
+    deletable: false,
+    components: [],
+    async edit(payload: unknown) {
+      payloads.push(payload);
+      return message;
+    },
+  };
+  const channel = {
+    guildId,
+    name: 'musica',
+    async send(payload: unknown) {
+      payloads.push(payload);
+      return message;
+    },
+  };
+  const track = {
+    id: 'track-1',
+    title: 'One More Time',
+    duration: '5:20',
+    source: 'youtube',
+    author: 'Daft Punk',
+    url: 'https://example.com/track',
+    thumbnail: 'https://example.com/thumb.jpg',
+    requestedBy: { username: 'Santiago' },
+  } as unknown as Track;
+  const queue = {
+    guild: { id: guildId },
+    metadata: { channel },
+    currentTrack: track,
+    tracks: {
+      size: 2,
+      data: [track, { ...track, id: 'track-2' }],
+    },
+    history: { isEmpty: () => true, tracks: { size: 0 } },
+    repeatMode: 0,
+    node: { isPaused: () => false, volume: 70, createProgressBar: () => '0:00 / 5:20' },
+    channel: { name: 'musica' },
+  } as unknown as GuildQueue;
+
+  console.log = () => {};
+  try {
+    await ready(client, player, guildId);
+    events.emit('audioTrackAdd', queue, track);
+    await new Promise((resolve) => setImmediate(resolve));
+  } finally {
+    console.log = originalLog;
+  }
+
+  const last = payloads.at(-1) as any;
+  assert.ok(last, 'debe enviar el panel actualizado');
+
+  const queueField = last.embeds[0].data.fields.find((field: any) => field.name === '📋 Cola');
+  assert.equal(queueField?.value, '2 canciones');
+
+  const buttons = last.components.flatMap((row: any) => row.components);
+  for (const customId of ['panel_shuffle', 'panel_queue']) {
+    const button = buttons.find((candidate: any) => candidate.data.custom_id === customId);
+    assert.notEqual(button?.data.disabled, true, `${customId} debe quedar habilitado`);
+  }
 });

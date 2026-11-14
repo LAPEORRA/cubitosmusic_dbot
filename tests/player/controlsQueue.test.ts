@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import type { GuildQueue } from 'discord-player';
-import { backTrack, clearQueue, removeTrack, skipTo, skipTrack } from '../../src/player/controls.js';
+import { backTrack, clearQueue, removeTrack, skipTo, skipTrack, stopQueue } from '../../src/player/controls.js';
 
 interface FakeTrack {
   id: string;
@@ -63,11 +63,21 @@ function fakeQueue(
     },
   };
 
+  const connection = {
+    disconnect: () => {
+      events.push('disconnect');
+    },
+  };
+
   return {
     queue: {
       tracks,
       node,
       history,
+      connection,
+      delete: () => {
+        events.push('delete');
+      },
       isPlaying: () => !paused,
     } as unknown as GuildQueue,
     store,
@@ -163,4 +173,17 @@ test('backTrack no reanuda si no hay historial', async () => {
   const { queue, events } = fakeQueue(['a'], () => true, true, false);
   assert.equal(await backTrack(queue), false);
   assert.deepEqual(events, []);
+});
+
+test('stopQueue desconecta la voz antes de eliminar la cola', async () => {
+  const { queue, events } = fakeQueue(['a']);
+  await stopQueue(queue);
+  assert.deepEqual(events, ['disconnect', 'delete']);
+});
+
+test('stopQueue elimina la cola aunque no haya conexión activa', async () => {
+  const { queue, events } = fakeQueue(['a']);
+  (queue as unknown as { connection: unknown }).connection = null;
+  await stopQueue(queue);
+  assert.deepEqual(events, ['delete']);
 });

@@ -140,6 +140,29 @@ test('el panel no anuncia /resume y lista skipto, remove y clear', () => {
   assert.ok(commands.includes('`/queue` | `/nowplaying`'));
 });
 
+test('el panel omite URL y miniatura cuando no son http(s) válidas', () => {
+  const track = { ...fakeTrack(), url: 'javascript:alert(1)', thumbnail: 'no-es-url' } as unknown as Track;
+  const embed = buildPanelEmbed(track, fakeQueue(), new Date());
+
+  assert.equal(embed.data.url, undefined);
+  assert.equal(embed.data.thumbnail, undefined);
+});
+
+test('el panel omite URL y miniatura vacías sin lanzar', () => {
+  const track = { ...fakeTrack(), url: '', thumbnail: undefined } as unknown as Track;
+  const embed = buildPanelEmbed(track, fakeQueue(), new Date());
+
+  assert.equal(embed.data.url, undefined);
+  assert.equal(embed.data.thumbnail, undefined);
+});
+
+test('el panel conserva URL y miniatura http(s) válidas', () => {
+  const embed = buildPanelEmbed(fakeTrack(), fakeQueue(), new Date());
+
+  assert.equal(embed.data.url, 'https://example.com/track');
+  assert.equal(embed.data.thumbnail?.url, 'https://example.com/thumb.jpg');
+});
+
 test('buildPanelRows devuelve dos filas con los controles y los botones nuevos', () => {
   const rows = buildPanelRows(false);
   assert.equal(rows.length, 2);

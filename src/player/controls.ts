@@ -103,5 +103,8 @@ export function skipTo(queue: GuildQueue, position: number): Track | null {
 }
 
 export async function stopQueue(queue: GuildQueue) {
+  // Desconexión explícita: `queue.delete()` no siempre cierra la conexión si el
+  // reproductor está en transición o pausado, y quedan conexiones huérfanas.
+  queue.connection?.disconnect();
   queue.delete();
 }

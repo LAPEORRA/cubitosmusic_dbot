@@ -92,6 +92,17 @@ function getErrorDetails(error: unknown) {
   return { errorMessage: String(error) };
 }
 
+/** Refresca el panel cuando cambia la cola sin cambiar la pista actual. */
+function refreshQueuePanel(queue: GuildQueue): void {
+  const channel = (queue.metadata as any)?.channel as any;
+  const current = queue.currentTrack;
+  if (!channel || !current) return;
+
+  const embed = buildPanelEmbed(current, queue, getStartedAt(queue.guild.id));
+  const rows = buildPanelRows(queue.node.isPaused(), queue.repeatMode, getPanelRowState(queue));
+  void updatePanel(channel, embed, rows);
+}
+
 export function logTracksQueued(queue: GuildQueue, tracks: Track[]) {
   const preview = tracks.slice(0, 5).map((track) => track.title);
   for (const track of tracks) queuedAtByTrack.set(track, performance.now());
@@ -284,9 +295,15 @@ export const ready = async (client: Client, player: Player, guildId: string, spo
     traceEvent('voice', 'disconnected', { guildId: queue.guild.id });
   });
 
-  player.events.on('audioTrackAdd', (queue, track) => logTracksQueued(queue, [track]));
+  player.events.on('audioTrackAdd', (queue, track) => {
+    logTracksQueued(queue, [track]);
+    refreshQueuePanel(queue);
+  });
 
-  player.events.on('audioTracksAdd', (queue, tracks) => logTracksQueued(queue, tracks));
+  player.events.on('audioTracksAdd', (queue, tracks) => {
+    logTracksQueued(queue, tracks);
+    refreshQueuePanel(queue);
+  });
 
   // Registrar eventos del player
   player.events.on('playerStart', (queue, track) => {
@@ -316,7 +333,11 @@ export const ready = async (client: Client, player: Player, guildId: string, spo
     const channel = (queue.metadata as any)?.channel as any;
     const current = queue.currentTrack;
     if (current) {
-      client.user?.setActivity(`⏸️ ${current.title}`, { type: ActivityType.Custom });
+      client.user?.setActivity({
+        name: 'Estado',
+        type: ActivityType.Custom,
+        state: `⏸️ ${current.title}`,
+      });
     }
     if (!channel || !current) return;
     logPlaybackEvent('player_pause', queue, {}, client);

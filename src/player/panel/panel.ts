@@ -41,6 +41,10 @@ function timeAgo(date: Date): string {
   return `hace ${hours} h`;
 }
 
+function isHttpUrl(value: unknown): value is string {
+  return typeof value === 'string' && /^https?:\/\//i.test(value);
+}
+
 export function buildPanelEmbed(track: Track, queue: GuildQueue, startedAt: Date, fallbackRequestedBy?: string) {
   const progress = queue.node.createProgressBar({ timecodes: true });
   // Prioridad: solicitante de la pista actual (una cola puede tener varios usuarios).
@@ -52,12 +56,10 @@ export function buildPanelEmbed(track: Track, queue: GuildQueue, startedAt: Date
     '→ `/queue` | `/nowplaying`',
   ].join('\n');
 
-  return new EmbedBuilder()
+  const embed = new EmbedBuilder()
     .setColor(0x5865f2)
     .setTitle(track.title)
-    .setURL(track.url)
     .setAuthor({ name: track.author || 'Desconocido' })
-    .setThumbnail(track.thumbnail)
     .addFields(
       { name: '⏱ Progreso', value: progress || track.duration, inline: true },
       { name: '📌 Añadida', value: timeAgo(startedAt), inline: true },
@@ -66,6 +68,13 @@ export function buildPanelEmbed(track: Track, queue: GuildQueue, startedAt: Date
       { name: '🛠 Comandos', value: commands, inline: false },
     )
     .setFooter({ text: `CubitoMusic • ${queue.node.volume}% vol` });
+
+  // `EmbedBuilder` valida URL/miniatura: con metadatos incompletos lanzaría y
+  // dejaría el panel sin actualizar. Solo se aplican si son http(s) válidas.
+  if (isHttpUrl(track.url)) embed.setURL(track.url);
+  if (isHttpUrl(track.thumbnail)) embed.setThumbnail(track.thumbnail);
+
+  return embed;
 }
 
 export type PanelRowState = {
