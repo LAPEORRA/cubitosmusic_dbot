@@ -305,8 +305,8 @@ test('refresca el panel al encolar pistas con reproducción activa', async () =>
   const last = payloads.at(-1) as any;
   assert.ok(last, 'debe enviar el panel actualizado');
 
-  const queueField = last.embeds[0].data.fields.find((field: any) => field.name === '📋 Cola');
-  assert.equal(queueField?.value, '2 canciones');
+  const footer = last.embeds[0].data.footer.text;
+  assert.ok(footer.includes('Cola: 2'), `el footer debe reflejar la cola: ${footer}`);
 
   const buttons = last.components.flatMap((row: any) => row.components);
   for (const customId of ['panel_shuffle', 'panel_queue']) {

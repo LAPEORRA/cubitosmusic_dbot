@@ -58,10 +58,6 @@ function fakeTrack(requestedBy: unknown = null): Track {
   } as unknown as Track;
 }
 
-function embedField(embed: EmbedBuilder, name: string): string | undefined {
-  return embed.data.fields?.find((field) => field.name === name)?.value;
-}
-
 function buttonIds(row: ActionRowBuilder<ButtonBuilder>): Array<string | undefined> {
   return row.components.map((button) => (button.data as { custom_id?: string }).custom_id);
 }
@@ -108,8 +104,12 @@ test('an empty-queue panel update is not overwritten by a pending playback updat
 
   await Promise.all([activeUpdate, emptyUpdate]);
 
-  assert.equal(description, '📭 **Cola vacía** — la reproducción terminó.');
-  assert.equal(title, undefined);
+  assert.equal(
+    description,
+    'Me desconecté del canal de voz porque no quedan canciones en la cola.\n'
+    + 'Usa `/play` cuando quieras volver a escuchar música.',
+  );
+  assert.equal(title, '📭 Cola finalizada');
 
   // El panel deshabilitado ya no se retiene en memoria: la próxima sesión crea uno nuevo.
   assert.equal(getPanelMessage(guildId), undefined);
@@ -131,33 +131,43 @@ test('an empty-queue panel update is not overwritten by a pending playback updat
   assert.equal(getPanelMessage(guildId), newMessage);
 });
 
-test('el panel prioriza al solicitante de la pista actual sobre el fallback de la cola', () => {
+test('el panel menciona al solicitante cuando conoce su id', () => {
   const embed = buildPanelEmbed(
-    fakeTrack({ username: 'nuevo-usuario' }),
+    fakeTrack({ id: '123456789', username: 'nuevo-usuario' }),
     fakeQueue(),
     new Date(),
     'usuario-viejo',
   );
-  assert.equal(embedField(embed, '👤 Solicitada por'), 'nuevo-usuario');
+  const description = embed.data.description ?? '';
+
+  assert.ok(description.includes('<@123456789>'), description);
+  assert.ok(!description.includes('usuario-viejo'), 'no debe usar el fallback de la cola');
 });
 
-test('el panel usa el fallback solo si la pista no tiene solicitante', () => {
-  const embed = buildPanelEmbed(fakeTrack(null), fakeQueue(), new Date(), 'usuario-viejo');
-  assert.equal(embedField(embed, '👤 Solicitada por'), 'usuario-viejo');
+test('el panel usa el username del solicitante cuando la pista no trae id', () => {
+  const embed = buildPanelEmbed(fakeTrack({ username: 'nuevo-usuario' }), fakeQueue(), new Date(), 'usuario-viejo');
+  const description = embed.data.description ?? '';
+
+  assert.ok(description.includes('• nuevo-usuario'), description);
+  assert.ok(!description.includes('<@'), description);
 });
 
-test('el panel muestra Desconocido sin solicitante ni fallback', () => {
-  const embed = buildPanelEmbed(fakeTrack(null), fakeQueue(), new Date());
-  assert.equal(embedField(embed, '👤 Solicitada por'), 'Desconocido');
+test('el panel cae al solicitante de la cola y luego a Desconocido', () => {
+  const fallback = buildPanelEmbed(fakeTrack(null), fakeQueue(), new Date(), 'usuario-viejo');
+  assert.ok((fallback.data.description ?? '').includes('usuario-viejo'));
+
+  const unknown = buildPanelEmbed(fakeTrack(null), fakeQueue(), new Date());
+  assert.ok((unknown.data.description ?? '').includes('Desconocido'));
 });
 
-test('el panel no anuncia /resume y lista skipto, remove y clear', () => {
-  const embed = buildPanelEmbed(fakeTrack(), fakeQueue(), new Date());
-  const commands = embedField(embed, '🛠 Comandos') ?? '';
-  assert.ok(!commands.includes('/resume'), `no debe mencionar /resume: ${commands}`);
-  assert.ok(commands.includes('`/play <url|búsqueda>` | `/pause` | `/skip` | `/skipto`'));
-  assert.ok(commands.includes('`/stop` | `/clear` | `/remove` | `/loop` | `/shuffle`'));
-  assert.ok(commands.includes('`/queue` | `/nowplaying`'));
+test('la descripción del panel es compacta: progreso • solicitante y autor', () => {
+  const embed = buildPanelEmbed(fakeTrack({ id: '42' }), fakeQueue(), new Date());
+  const lines = (embed.data.description ?? '').split('\n');
+
+  assert.equal(lines.length, 2);
+  assert.equal(lines[0], '3:45 • <@42>');
+  assert.equal(lines[1], 'Por **Daft Punk**');
+  assert.equal(embed.data.fields, undefined, 'el panel ya no usa campos');
 });
 
 test('el panel omite URL y miniatura cuando no son http(s) válidas', () => {
@@ -239,16 +249,58 @@ test('formatPanelProgress en stream en vivo sin duración devuelve En vivo', () 
   assert.equal(formatPanelProgress(track, queue), 'En vivo');
 });
 
-test('el campo ⏱ Progreso del panel usa formatPanelProgress y no la barra ASCII', () => {
+test('la descripción del panel usa formatPanelProgress con cuenta regresiva y sin barra ASCII', () => {
   const queue = fakeTimedQueue({
     timestamp: { current: { label: '0:10', value: 10_000 }, total: { label: '3:00', value: 180_000 } },
   });
 
-  const embed = buildPanelEmbed(fakeTrack(), queue, new Date());
-  const progress = embedField(embed, '⏱ Progreso') ?? '';
+  const embed = buildPanelEmbed(fakeTrack({ id: '7' }), queue, new Date());
+  const [firstLine] = (embed.data.description ?? '').split('\n');
 
-  assert.match(progress, /^3:00 • termina <t:\d+:R>$/, progress);
-  assert.ok(!progress.includes('/'), `no debe usar la barra ASCII: ${progress}`);
+  assert.match(firstLine, /^3:00 • termina <t:\d+:R> • <@7>$/, firstLine);
+  assert.ok(!firstLine.includes('/'), `no debe usar la barra ASCII: ${firstLine}`);
+});
+
+test('el autor del panel muestra Reproduciendo con GIF animado y En pausa sin icono', () => {
+  const playing = buildPanelEmbed(fakeTrack(), fakeQueue(), new Date());
+  assert.equal(playing.data.author?.name, 'Reproduciendo');
+  assert.match(playing.data.author?.icon_url ?? '', /^https:\/\//);
+
+  const paused = buildPanelEmbed(fakeTrack(), fakeTimedQueue({ paused: true }), new Date());
+  assert.equal(paused.data.author?.name, 'En pausa');
+  assert.equal(paused.data.author?.icon_url, undefined, 'sin GIF al pausar');
+});
+
+test('el footer del panel resume estado, volumen, cola y loop', () => {
+  const makeQueue = (paused: boolean, repeatMode: number) => ({
+    node: { isPaused: () => paused, getTimestamp: () => null, volume: 55 },
+    tracks: { data: [{}, {}] },
+    repeatMode,
+  } as unknown as GuildQueue);
+
+  const playing = buildPanelEmbed(fakeTrack(), makeQueue(false, 1), new Date());
+  assert.equal(playing.data.footer?.text, 'Reproduciendo • Vol 55% • Cola: 2 • Loop: on');
+  assert.ok(playing.data.timestamp, 'el embed lleva timestamp');
+
+  const paused = buildPanelEmbed(fakeTrack(), makeQueue(true, 0), new Date());
+  assert.equal(paused.data.footer?.text, 'En pausa • Vol 55% • Cola: 2 • Loop: off');
+});
+
+test('los botones llevan etiqueta corta y conservan sus customIds', () => {
+  const [row1, row2] = buildPanelRows(false);
+  const labels = (row: ActionRowBuilder<ButtonBuilder>) =>
+    row.components.map((button) => (button.data as { label?: string }).label);
+
+  assert.deepEqual(labels(row1), ['Atrás', 'Pausar', 'Saltar', 'Stop', 'Cola']);
+  assert.deepEqual(labels(row2), ['Loop', 'Mezclar']);
+  assert.deepEqual(buttonIds(row1).concat(buttonIds(row2)), [
+    'panel_back', 'panel_pause', 'panel_skip', 'panel_stop', 'panel_queue', 'panel_loop', 'panel_shuffle',
+  ]);
+
+  const [pausedRow] = buildPanelRows(true);
+  const pauseButton = findButton([pausedRow], 'panel_pause');
+  assert.equal((pauseButton?.data as { label?: string }).label, 'Reanudar');
+  assert.equal((pauseButton?.data as { emoji?: { name?: string } }).emoji?.name, '▶️');
 });
 
 test('buildPanelRows devuelve dos filas con los controles y los botones nuevos', () => {

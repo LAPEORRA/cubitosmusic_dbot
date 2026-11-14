@@ -32,21 +32,20 @@ export function deletePanelMessage(guildId: string) {
   panelLocks.delete(guildId);
 }
 
-function timeAgo(date: Date): string {
-  const diff = Date.now() - date.getTime();
-  const minutes = Math.floor(diff / 60000);
-  if (minutes < 1) return 'ahora mismo';
-  if (minutes < 60) return `hace ${minutes} min`;
-  const hours = Math.floor(minutes / 60);
-  return `hace ${hours} h`;
-}
-
 function isHttpUrl(value: unknown): value is string {
   return typeof value === 'string' && /^https?:\/\//i.test(value);
 }
 
 /**
- * Texto del campo «⏱ Progreso» del panel.
+ * GIF del icono animado del autor mientras hay reproducción.
+ * Configurable con `PANEL_DISC_GIF_URL`; el valor por defecto es un GIF público
+ * de música (sustituible por un disco/vinilo girando).
+ */
+const SPINNING_DISC_GIF = process.env.PANEL_DISC_GIF_URL?.trim()
+  || 'https://media.tenor.com/2roX3uxz_68AAAAC/cat-jam-cat.gif';
+
+/**
+ * Texto de progreso del panel (primera línea de la descripción).
  *
  * En vez de la barra ASCII se muestra la duración total y, al reproducir, una
  * cuenta regresiva nativa de Discord (`<t:UNIX:R>`) calculada con el tiempo
@@ -74,29 +73,39 @@ export function formatPanelProgress(track: Track, queue: GuildQueue, nowMs: numb
   return track.duration || 'En vivo';
 }
 
+/**
+ * Embed principal del panel de reproducción (estilo compacto):
+ * autor con GIF animado mientras suena, descripción de dos líneas y footer de estado.
+ *
+ * @param startedAt Se conserva por compatibilidad con los eventos del player;
+ *   el tiempo ya no se renderiza como campo propio.
+ */
 export function buildPanelEmbed(track: Track, queue: GuildQueue, startedAt: Date, fallbackRequestedBy?: string) {
-  const progress = formatPanelProgress(track, queue);
+  const isPaused = Boolean(queue.node?.isPaused?.());
   // Prioridad: solicitante de la pista actual (una cola puede tener varios usuarios).
   const requester = track.requestedBy?.username || fallbackRequestedBy || 'Desconocido';
+  // Con mención si conocemos el id; si no, el nombre (o el fallback de la cola).
+  const requesterLabel = track.requestedBy?.id ? `<@${track.requestedBy.id}>` : requester;
 
-  const commands = [
-    '→ `/play <url|búsqueda>` | `/pause` | `/skip` | `/skipto`',
-    '→ `/stop` | `/clear` | `/remove` | `/loop` | `/shuffle`',
-    '→ `/queue` | `/nowplaying`',
+  const description = [
+    `${formatPanelProgress(track, queue)} • ${requesterLabel}`,
+    `Por **${track.author || 'Desconocido'}**`,
   ].join('\n');
 
   const embed = new EmbedBuilder()
     .setColor(0x5865f2)
     .setTitle(track.title)
-    .setAuthor({ name: track.author || 'Desconocido' })
-    .addFields(
-      { name: '⏱ Progreso', value: progress || track.duration, inline: true },
-      { name: '📌 Añadida', value: timeAgo(startedAt), inline: true },
-      { name: '👤 Solicitada por', value: requester, inline: true },
-      { name: '📋 Cola', value: `${queue.tracks.data.length} canciones`, inline: true },
-      { name: '🛠 Comandos', value: commands, inline: false },
+    .setAuthor(
+      isPaused
+        // Sin iconURL animado: el GIF se detiene visualmente al pausar.
+        ? { name: 'En pausa' }
+        : { name: 'Reproduciendo', iconURL: SPINNING_DISC_GIF },
     )
-    .setFooter({ text: `CubitoMusic • ${queue.node.volume}% vol` });
+    .setDescription(description)
+    .setFooter({
+      text: `${isPaused ? 'En pausa' : 'Reproduciendo'} • Vol ${queue.node.volume}% • Cola: ${queue.tracks.data.length} • Loop: ${queue.repeatMode ? 'on' : 'off'}`,
+    })
+    .setTimestamp();
 
   // `EmbedBuilder` valida URL/miniatura: con metadatos incompletos lanzaría y
   // dejaría el panel sin actualizar. Solo se aplican si son http(s) válidas.
@@ -132,39 +141,46 @@ export function buildPanelRows(
 ) {
   const back = new ButtonBuilder()
     .setCustomId('panel_back')
-    .setEmoji('⏮')
+    .setEmoji('⏮️')
+    .setLabel('Atrás')
     .setStyle(ButtonStyle.Secondary);
   if (state?.canBack === false) back.setDisabled(true);
 
   const pause = new ButtonBuilder()
     .setCustomId('panel_pause')
     .setEmoji(isPaused ? '▶️' : '⏸️')
+    .setLabel(isPaused ? 'Reanudar' : 'Pausar')
     .setStyle(isPaused ? ButtonStyle.Success : ButtonStyle.Secondary);
 
   const skip = new ButtonBuilder()
     .setCustomId('panel_skip')
-    .setEmoji('⏭')
+    .setEmoji('⏭️')
+    .setLabel('Saltar')
     .setStyle(ButtonStyle.Primary);
 
   const stop = new ButtonBuilder()
     .setCustomId('panel_stop')
-    .setEmoji('⏹')
+    .setEmoji('⏹️')
+    .setLabel('Stop')
     .setStyle(ButtonStyle.Danger);
 
   const queueBtn = new ButtonBuilder()
     .setCustomId('panel_queue')
     .setEmoji('📋')
+    .setLabel('Cola')
     .setStyle(ButtonStyle.Secondary);
   if (state?.hasQueue === false) queueBtn.setDisabled(true);
 
   const loop = new ButtonBuilder()
     .setCustomId('panel_loop')
     .setEmoji('🔁')
+    .setLabel('Loop')
     .setStyle(repeatMode !== 0 ? ButtonStyle.Success : ButtonStyle.Secondary);
 
   const shuffle = new ButtonBuilder()
     .setCustomId('panel_shuffle')
     .setEmoji('🔀')
+    .setLabel('Mezclar')
     .setStyle(ButtonStyle.Secondary);
   if (state?.canShuffle === false) shuffle.setDisabled(true);
 
@@ -258,8 +274,13 @@ export async function updateEmptyPanel(channel: any) {
       await existing.edit({
         embeds: [new EmbedBuilder()
           .setColor(0x5865f2)
-          .setDescription('📭 **Cola vacía** — la reproducción terminó.')
-          .setFooter({ text: 'CubitoMusic' })],
+          .setTitle('📭 Cola finalizada')
+          .setDescription(
+            'Me desconecté del canal de voz porque no quedan canciones en la cola.\n'
+            + 'Usa `/play` cuando quieras volver a escuchar música.',
+          )
+          .setFooter({ text: 'CubitoMusic' })
+          .setTimestamp()],
         components: disabledRows,
       });
       // Panel deshabilitado en Discord: liberamos la referencia para no retener el Message en RAM
