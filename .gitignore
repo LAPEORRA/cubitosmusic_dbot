@@ -2,6 +2,7 @@
 node_modules/
 *.rar
 contexto_*.txt
+contexto_bot*.txt
 
 # Build
 dist/

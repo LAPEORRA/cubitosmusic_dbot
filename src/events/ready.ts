@@ -15,6 +15,24 @@ import {
 const playbackSessionIds = new WeakMap<GuildQueue, string>();
 const queuedAtByTrack = new WeakMap<Track, number>();
 const tracedDispatchers = new WeakSet<object>();
+const ERROR_LOG_DEDUP_WINDOW_MS = 2_000;
+const recentErrorLogSignatures = new Map<string, number>();
+
+function isDuplicateErrorLog(guildId: string, trackTitle: string, errorText: string): boolean {
+  const now = Date.now();
+  for (const [signature, loggedAt] of recentErrorLogSignatures) {
+    if (now - loggedAt >= ERROR_LOG_DEDUP_WINDOW_MS) {
+      recentErrorLogSignatures.delete(signature);
+    }
+  }
+
+  const signature = `${guildId}:${trackTitle}:${errorText}`;
+  const loggedAt = recentErrorLogSignatures.get(signature);
+  if (loggedAt !== undefined && now - loggedAt < ERROR_LOG_DEDUP_WINDOW_MS) return true;
+
+  recentErrorLogSignatures.set(signature, now);
+  return false;
+}
 
 function traceQueueStateChanges(queue: GuildQueue): void {
   const dispatcher = queue.dispatcher;
@@ -118,6 +136,8 @@ function logPlaybackEvent(
   let badge = 'INFO';
   let color: LogColor = 'gray';
   let detail = '';
+  let errorText = '';
+  let failedTrackTitle = '';
   let metricsText = metrics;
   const rawJson: Record<string, unknown> = { event, ...details };
 
@@ -187,10 +207,11 @@ function logPlaybackEvent(
     case 'playback_error': {
       badge = event === 'playback_error' ? 'ERR AUDIO' : 'ERROR';
       color = 'red';
-      const errorText = typeof details.error === 'object' && details.error !== null
+      errorText = typeof details.error === 'object' && details.error !== null
         ? getErrorDetails(details.error).errorMessage
         : String(details.error ?? details.errorMessage ?? 'Error de reproducción');
       const failedTrack = queue.currentTrack;
+      failedTrackTitle = failedTrack?.title ?? '—';
       detail = failedTrack ? `${failedTrack.title}: ${errorText}` : errorText;
       break;
     }
@@ -200,6 +221,13 @@ function logPlaybackEvent(
       detail = event;
       break;
     }
+  }
+
+  if (
+    (event === 'player_error' || event === 'playback_error') &&
+    isDuplicateErrorLog(queue.guild.id, failedTrackTitle, errorText)
+  ) {
+    return;
   }
 
   logRow({
@@ -242,6 +270,7 @@ export const ready = async (client: Client, player: Player, guildId: string, spo
   player.events.on('connection', (queue) => traceQueueStateChanges(queue));
   player.on('debug', (msg) => traceEvent('debug', 'player_debug', { msg }));
   player.events.on('debug', (queue, msg) => {
+    if (msg.startsWith('[NW]')) return;
     traceEvent('debug', 'queue_debug', { guildId: queue.guild.id, msg });
   });
   player.events.on('playerFinish', (queue, track) => {

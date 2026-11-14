@@ -1,16 +1,17 @@
 # Handoff — CubitoMusic
 
-> Documento de traspaso de sesión: estado del proyecto al **13-nov-2026** para retomar en una sesión fresca.
+> Documento de traspaso de sesión: estado del proyecto al **14-nov-2026** para retomar en una sesión fresca.
 
 ## Estado actual
 
 - **Carpeta activa:** `D:\cubitosmusic` (reubicado desde `D:\Proyectos_Opencode`).
-- **Git:** rama `main`, `HEAD` en `d62343e`, **11 commits por delante** de `origin/main`. Hay **9 archivos modificados y 2 nuevos sin commit** (incluido este handoff); no hay cambios staged.
+- **Git:** rama `main`, `HEAD` en `c425d21`, sincronizada con `origin/main` al último `git fetch`. El lote local (`.gitignore`, `AGENTS.md`, `HANDOFF.md`, `package.json`, `src/events/ready.ts`, `tests/events/ready.test.ts` y el nuevo `.github/copilot-instructions.md`) fue **revisado y está listo para cierre**; se agrupa en el commit `chore(telemetry): trazas live-trace, deduplicación de errores y ritual de contexto`. **Push pendiente** de autorización.
 - **Base previa:** `262cb79` (`feat: autodesconexión por inactividad y botones loop/shuffle en el panel`).
-- **Remoto:** `https://github.com/LAPEORRA/cubitosmusic_dbot.git` (`origin/main`). **Push pendiente** (decisión del usuario).
+- **Remoto:** `https://github.com/LAPEORRA/cubitosmusic_dbot.git` (`origin/main`). El commit `c425d21` ya está publicado; los cambios listados arriba siguen locales.
 
 ### Últimos commits
 ```
+c425d21 fix: reanudar audio antes de saltar, corregir logs de playlists y validar Spotify parcial
 d62343e fix: sanitización multilínea en TUI, detalle de error por pista y feedback en /skipto
 8c1ac17 fix: deduplicación de interacciones, silencio de 10062/40060 y eliminación de ephemeral
 039f736 fix: limpieza de Maps en panel, manejo de queueDelete y sanitización de errores en /play
@@ -27,7 +28,7 @@ a3c5687 refactor: reorganiza el proyecto para revisión en GitHub
 ## Verificación (todo en verde al cerrar)
 
 1. `npm run typecheck` → ✅ 0 errores (src + tests + scripts)
-2. `npm test` → ✅ **66/66 pass, 0 fail**
+2. `npm test` → ✅ **71/71 pass, 0 fail** (incluye deduplicación de errores y trazas LIVE_TRACE)
 3. `npm run build` → ✅ OK (tsc → `dist/`)
 
 > `deploy-commands` ya se ejecutó: **11 comandos** registrados en el guild (`play, skip, skipto, clear, remove, stop, queue, pause, loop, shuffle, nowplaying`). Solo re-desplegar si cambia la definición (`data`) de algún comando.
@@ -74,7 +75,7 @@ a3c5687 refactor: reorganiza el proyecto para revisión en GitHub
 - El log `[BOTÓN]` se emite **después** de `await interaction.deferUpdate()`, así un fallo del defer no deja un log de acción antes del error. Cubierto por tests.
 - Tests de esa etapa: `tests/events/interactionCreate.test.ts` (dedupe y fallos), `tests/player/panelButtons.test.ts` (sin `ephemeral` y orden del log). El siguiente lote eleva el total a **66**.
 
-### 7. Pulido final (cambios locales sin commit; seis ajustes)
+### 7. Pulido final (commit `c425d21`; seis ajustes)
 - `controls.ts`: `skipTrack`, `skipTo` y `backTrack` reanudan el nodo antes de saltar o volver si estaba pausado.
 - `ready.ts`: los logs `tracks_queued` reciben resúmenes ligeros de pistas para mostrar correctamente el nombre de la playlist sin serializar `Track` completos; tras activar `audioPreset`, se fija el volumen base a 70.
 - `panel.ts` lista `/skip`, `/skipto`, `/clear` y `/remove`; `/nowplaying` usa «Sin repetición».
@@ -82,11 +83,29 @@ a3c5687 refactor: reorganiza el proyecto para revisión en GitHub
 - `config.ts` rechaza credenciales parciales de Spotify con `ConfigError`.
 - Tests nuevos/actualizados en `tests/config.test.ts`, `tests/events/ready.test.ts`, `tests/player/controlsQueue.test.ts` y `tests/player/panel.test.ts`.
 - Validación verificada: `npm run typecheck` ✅, `npm test` ✅ **66/66**, `npm run build` ✅.
-- No se modificaron en este lote `play.ts`, `youtubeDlpMix.ts` ni el registro de extractores en `index.ts`. No se hizo commit ni push.
+- No se modificaron en este lote `play.ts`, `youtubeDlpMix.ts` ni el registro de extractores en `index.ts`.
+
+### 8. Telemetría y trazas (cambios locales sin commit; OpenCode, 14-nov-2026)
+- `ready.ts`: deduplicación de errores de TUI por 2 s (`isDuplicateErrorLog`), filtrado de debug `[NW]` sin perder trazas seguras, soporte `LIVE_TRACE` (archivo `logs/live-trace.jsonl`) y `LOG_TO_FILE`.
+- `tests/events/ready.test.ts`: nueva prueba de deduplicación/filtrado; total de suite elevado a **71/71**.
+- Verificación: `npm run typecheck` ✅, `npm test` ✅ **71/71**, `npm run build` ✅.
+- No se modificaron `play.ts`, `youtubeDlpMix.ts` ni el registro de extractores.
+
+### 9. Ritual de trabajo (Copilot, 14-nov-2026)
+- `AGENTS.md` documenta roles y cadena de trabajo (Santiago, Gemini, OpenCode/Copilot), reconocimiento Git obligatorio antes de empezar e inicialización solo cuando se solicita.
+- Se añadió la convención para exportar contexto con `npm run context` e ignorar el artefacto, y para proponer commits atómicos Conventional Commits sin publicar sin autorización explícita.
+- `.github/copilot-instructions.md` fue revisado y sigue apuntando a `AGENTS.md` y `HANDOFF.md`.
+- Verificación en este cierre: `npm run typecheck` ✅, `npm test` ✅ **71/71**, `npm run build` ✅. Actualizó Copilot; quedan cambios locales sin commit.
+
+### 10. Cierre del lote de telemetría y ritual (OpenCode, 14-nov-2026)
+- `package.json`: `npm run context` incluye además `AGENTS.md` y `HANDOFF.md` cuando existen en la raíz (junto a `package.json` y `src/`); `contexto_bot.txt` sigue ignorado por Git.
+- `src/events/ready.ts` + `tests/events/ready.test.ts`: deduplicación de errores por 2 s, filtro de debug `[NW]` y pruebas de `LIVE_TRACE` (ver sección 8).
+- Cambios locales revisados y listos para cierre. Se agrupan en el commit `chore(telemetry): trazas live-trace, deduplicación de errores y ritual de contexto`; **sin push**.
+- Verificación: `npm run context` ✅ (30 archivos), `npm run typecheck` ✅, `npm test` ✅ **71/71**, `npm run build` ✅.
 
 ## Pendientes / próximos pasos
 
-1. **Commit/push pendientes:** hay 11 commits locales sin publicar y el lote de la sección 7 aún sin commit. Esperar decisión explícita del usuario antes de publicar.
+1. **Push pendiente:** el lote local revisado se cierra en `chore(telemetry): trazas live-trace, deduplicación de errores y ritual de contexto`; publicar solo cuando Santiago lo autorice.
 2. **QA visual real** de la TUI en PowerShell con el bot vivo (`npm run dev`). Preview estático ya validado con `tsx`.
 3. **QA manual en Discord:** banner/logs, trazas `CMD`/`BOTÓN`, botones 🔁/🔀, `/clear`, `/remove`, `/skipto`, autodesconexión a los 5 min y ausencia de warnings `ephemeral`.
 4. **Bugs P0 restantes (no tocados):** panel congelado en casos borde, `/stop` que no desconecta, `/pause` toggle, `audioPreset` privado.

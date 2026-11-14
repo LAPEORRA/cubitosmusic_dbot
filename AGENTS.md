@@ -1,5 +1,24 @@
 # AGENTS.md
 
+## Roles y fuente de verdad
+- El repositorio es la fuente de verdad del proyecto; no dependas de chats ni de copiar/pegar manual como estado canónico.
+- **Product Owner:** Santiago define el objetivo y aprueba decisiones durante el trabajo.
+- **Arquitecto/auditor externo:** Gemini analiza contexto, diffs o logs y propone la solución mediante un prompt atómico; no ejecuta cambios locales.
+- **Ejecutores:** OpenCode y GitHub Copilot implementan el prompt explícito, siguen estas reglas, ejecutan las verificaciones y reportan resultados. No se adelantan a decisiones de arquitectura.
+
+## Inicio de sesión
+Antes de tocar código:
+1. Ejecuta `git fetch origin` y `git status --short --branch`.
+2. Informa si la rama está adelantada, atrasada o divergente, y señala cambios locales o conflictos que deban preservarse.
+3. Lee `AGENTS.md` y `HANDOFF.md` para recuperar las restricciones y el punto exacto del trabajo.
+
+## Inicialización de proyectos (solo cuando se solicite)
+- Detecta el stack y la estructura reales antes de crear instrucciones.
+- `AGENTS.md` debe documentar stack, estructura, comandos de verificación, zonas congeladas (vacías inicialmente) y Checklist de Cierre.
+- Crea `.github/copilot-instructions.md` como puntero corto a `AGENTS.md` y a la lectura/actualización de `HANDOFF.md`.
+- Crea `HANDOFF.md` con fecha, objetivo, estado de pruebas, último commit y pendientes.
+- Añade un comando `npm run context` o equivalente para exportar el contexto fuente; excluye artefactos generados y añade el archivo exportado a `.gitignore`.
+
 ## Proyecto
 Bot Discord **CubitoMusic**: discord.js v14, TypeScript estricto + ESM, discord-player v7.
 Audio desde YouTube (yt-dlp + youtubei.js), YouTube Music, Spotify y SoundCloud. Slash commands de guild + panel interactivo.
@@ -91,3 +110,22 @@ scripts/deploy-commands.ts    — Registro de comandos vía REST (usa el registr
 - Al cambiar la definición de un comando (`data`), re-ejecutar `npm run deploy-commands`.
 - **Añadir un comando**: crear `src/commands/<categoría>/<nombre>.ts` con `data` + run, importarlo en `src/commands/index.ts` y añadir su entrada. El router y el deploy se actualizan solos (no hay `switch` ni listas manuales).
 - No spamear `/play` (rate limits y resoluciones de playlist lentas; timeout 30s por operación).
+
+## Cierre de tarea (obligatorio para cualquier agente)
+
+Antes de dar por terminado un bloque de trabajo:
+
+1. **Verificación obligatoria**
+   - `npm run typecheck` → 0 errores.
+   - `npm test` → todos en verde.
+   - `npm run build` → OK.
+2. **Estado vivo (`HANDOFF.md`)**
+   - Leer `HANDOFF.md` antes de escribir.
+   - Actualizar con: fecha, último commit, conteo de tests en verde, quién actualizó (OpenCode/Copilot/Usuario) y pendientes.
+3. **Puntero de Copilot**
+   - Verificar que `.github/copilot-instructions.md` siga apuntando a estas instrucciones y a `HANDOFF.md`.
+4. **Zonas congeladas**
+   - No tocar `src/commands/music/play.ts`, `src/player/extractors/youtubeDlpMix.ts` ni el registro de extractores en `src/index.ts` sin pedido explícito.
+5. **Commit propuesto**
+   - Reportar un commit atómico con mensaje Conventional Commits (`feat:`, `fix:`, `chore:`, `docs:`) adecuado al cambio.
+   - No crear commits ni hacer push salvo pedido explícito del usuario.

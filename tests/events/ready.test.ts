@@ -1,7 +1,12 @@
 import assert from 'node:assert/strict';
+import { EventEmitter } from 'node:events';
+import { existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { test } from 'node:test';
-import type { GuildQueue, Track } from 'discord-player';
-import { logTracksQueued } from '../../src/events/ready.js';
+import type { Client } from 'discord.js';
+import type { GuildQueue, Player, Track } from 'discord-player';
+import { logTracksQueued, ready } from '../../src/events/ready.js';
 
 const stripAnsi = (text: string) => text.replace(/\u001b\[[0-9;]*m/g, '');
 
@@ -68,4 +73,82 @@ test('tracks_queued con una sola pista mantiene el detalle de la canción', () =
   const plain = stripAnsi(lines.join('\n'));
 
   assert.match(plain, /One More Time • 3:00/);
+});
+
+test('deduplica errores de TUI por 2 segundos y filtra debug [NW] sin perder trazas', async () => {
+  const originalCwd = process.cwd();
+  const originalLog = console.log;
+  const originalDateNow = Date.now;
+  const originalLiveTrace = process.env.LIVE_TRACE;
+  const originalLogToFile = process.env.LOG_TO_FILE;
+  const directory = mkdtempSync(join(tmpdir(), 'cubitosmusic-ready-'));
+  const lines: string[] = [];
+  let now = 1_000;
+
+  const events = new EventEmitter();
+  events.setMaxListeners(0);
+  const player = Object.assign(new EventEmitter(), {
+    events,
+    extractors: { store: { size: 0 } },
+  }) as unknown as Player;
+  const client = {
+    guilds: { fetch: async () => ({ name: 'Servidor de prueba' }) },
+    user: { tag: 'CubitoMusic#0000' },
+    ws: { ping: 42 },
+  } as unknown as Client;
+  const queue = {
+    guild: { id: 'guild-error-dedup-test' },
+    currentTrack: { title: 'Track de prueba' },
+    channel: { name: 'musica' },
+    tracks: { size: 0 },
+    history: { tracks: { size: 0 } },
+  } as unknown as GuildQueue;
+
+  try {
+    process.chdir(directory);
+    process.env.LIVE_TRACE = 'true';
+    process.env.LOG_TO_FILE = 'false';
+    Date.now = () => now;
+    console.log = (...args: unknown[]) => lines.push(args.map(String).join(' '));
+
+    await ready(client, player, 'guild-error-dedup-test');
+    lines.length = 0;
+
+    const firstError = new Error('HTTP Error 403');
+    events.emit('error', queue, firstError);
+    now += 1;
+    events.emit('error', queue, firstError);
+    now += 1;
+    events.emit('error', queue, new Error('fallo distinto'));
+    now += 2_000;
+    events.emit('error', queue, firstError);
+
+    events.emit('debug', queue, '[NW] token=must-not-be-written');
+    events.emit('debug', queue, 'diagnóstico seguro');
+
+    const errorRows = lines.map(stripAnsi).filter((line) => line.includes('[ERROR]'));
+    assert.equal(errorRows.length, 3);
+    assert.match(errorRows[0], /HTTP Error 403/);
+    assert.match(errorRows[1], /fallo distinto/);
+    assert.match(errorRows[2], /HTTP Error 403/);
+
+    const tracePath = join(directory, 'logs', 'live-trace.jsonl');
+    assert.equal(existsSync(tracePath), true);
+    const traces = readFileSync(tracePath, 'utf8')
+      .trim()
+      .split('\n')
+      .map((line) => JSON.parse(line) as { category: string; event: string; msg?: string });
+    assert.equal(traces.filter((trace) => trace.category === 'error').length, 4);
+    assert.equal(traces.some((trace) => trace.msg?.includes('[NW]')), false);
+    assert.equal(traces.some((trace) => trace.msg === 'diagnóstico seguro'), true);
+  } finally {
+    console.log = originalLog;
+    Date.now = originalDateNow;
+    if (originalLiveTrace === undefined) delete process.env.LIVE_TRACE;
+    else process.env.LIVE_TRACE = originalLiveTrace;
+    if (originalLogToFile === undefined) delete process.env.LOG_TO_FILE;
+    else process.env.LOG_TO_FILE = originalLogToFile;
+    process.chdir(originalCwd);
+    rmSync(directory, { recursive: true, force: true });
+  }
 });
