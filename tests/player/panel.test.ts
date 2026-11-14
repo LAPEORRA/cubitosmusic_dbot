@@ -13,6 +13,7 @@ import {
   buildPanelEmbed,
   buildPanelRows,
   getPanelMessage,
+  getPanelRowState,
   setPanelMessage,
   updateEmptyPanel,
   updatePanel,
@@ -43,6 +44,16 @@ function embedField(embed: EmbedBuilder, name: string): string | undefined {
 
 function buttonIds(row: ActionRowBuilder<ButtonBuilder>): Array<string | undefined> {
   return row.components.map((button) => (button.data as { custom_id?: string }).custom_id);
+}
+
+function findButton(rows: ActionRowBuilder<ButtonBuilder>[], customId: string): ButtonBuilder | undefined {
+  for (const row of rows) {
+    const button = row.components.find(
+      (component) => (component.data as { custom_id?: string }).custom_id === customId,
+    );
+    if (button) return button;
+  }
+  return undefined;
 }
 
 test('an empty-queue panel update is not overwritten by a pending playback update', async () => {
@@ -146,6 +157,65 @@ test('el botón loop se marca en Success con repeatMode distinto de 0', () => {
 
   const [, idle] = buildPanelRows(false, 0);
   assert.equal(idle.components[0].data.style, ButtonStyle.Secondary);
+});
+
+test('buildPanelRows deshabilita back, shuffle y queue cuando el estado lo indica', () => {
+  const rows = buildPanelRows(false, 0, { canBack: false, canShuffle: false, hasQueue: false });
+
+  assert.equal(findButton(rows, 'panel_back')?.data.disabled, true);
+  assert.equal(findButton(rows, 'panel_shuffle')?.data.disabled, true);
+  assert.equal(findButton(rows, 'panel_queue')?.data.disabled, true);
+
+  // Los controles que no dependen del contexto siguen operativos.
+  for (const customId of ['panel_pause', 'panel_skip', 'panel_stop', 'panel_loop']) {
+    assert.notEqual(findButton(rows, customId)?.data.disabled, true, `${customId} no debe estar deshabilitado`);
+  }
+});
+
+test('buildPanelRows habilita back, shuffle y queue cuando hay historial y cola', () => {
+  const rows = buildPanelRows(false, 0, { canBack: true, canShuffle: true, hasQueue: true });
+
+  for (const customId of ['panel_back', 'panel_shuffle', 'panel_queue']) {
+    assert.notEqual(findButton(rows, customId)?.data.disabled, true, `${customId} debe estar habilitado`);
+  }
+});
+
+test('buildPanelRows sin estado mantiene todos los botones habilitados (retrocompatible)', () => {
+  const rows = buildPanelRows(false);
+
+  for (const customId of ['panel_back', 'panel_shuffle', 'panel_queue']) {
+    assert.notEqual(findButton(rows, customId)?.data.disabled, true);
+  }
+});
+
+test('buildPanelRows solo deshabilita los botones indicados en un estado parcial', () => {
+  const rows = buildPanelRows(false, 0, { canBack: false });
+
+  assert.equal(findButton(rows, 'panel_back')?.data.disabled, true);
+  assert.notEqual(findButton(rows, 'panel_shuffle')?.data.disabled, true);
+  assert.notEqual(findButton(rows, 'panel_queue')?.data.disabled, true);
+});
+
+test('getPanelRowState deriva canBack, canShuffle y hasQueue desde la cola', () => {
+  const withHistory = {
+    tracks: { size: 2 },
+    history: { isEmpty: () => false, tracks: { size: 1 } },
+  } as unknown as GuildQueue;
+  assert.deepEqual(getPanelRowState(withHistory), {
+    canBack: true,
+    canShuffle: true,
+    hasQueue: true,
+  });
+
+  const empty = {
+    tracks: { size: 0 },
+    history: { isEmpty: () => true, tracks: { size: 0 } },
+  } as unknown as GuildQueue;
+  assert.deepEqual(getPanelRowState(empty), {
+    canBack: false,
+    canShuffle: false,
+    hasQueue: false,
+  });
 });
 
 test('updateEmptyPanel deshabilita los botones de todas las filas', async () => {

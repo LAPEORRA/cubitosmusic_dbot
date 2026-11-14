@@ -28,7 +28,7 @@ a3c5687 refactor: reorganiza el proyecto para revisión en GitHub
 ## Verificación (todo en verde al cerrar)
 
 1. `npm run typecheck` → ✅ 0 errores (src + tests + scripts)
-2. `npm test` → ✅ **71/71 pass, 0 fail** (incluye deduplicación de errores y trazas LIVE_TRACE)
+2. `npm test` → ✅ **77/77 pass, 0 fail** (deduplicación de errores, trazas LIVE_TRACE, botones reactivos y presencia)
 3. `npm run build` → ✅ OK (tsc → `dist/`)
 
 > `deploy-commands` ya se ejecutó: **11 comandos** registrados en el guild (`play, skip, skipto, clear, remove, stop, queue, pause, loop, shuffle, nowplaying`). Solo re-desplegar si cambia la definición (`data`) de algún comando.
@@ -107,12 +107,19 @@ a3c5687 refactor: reorganiza el proyecto para revisión en GitHub
 - Reconciliado `HANDOFF.md` con el estado real: el commit `1b51762` ya estaba creado y el árbol limpio; se publicó junto con esta corrección documental.
 - Verificación en la retoma: `npm run typecheck` ✅, `npm test` ✅ **71/71**, `npm run build` ✅.
 
+### 12. Botones reactivos y presencia dinámica (OpenCode, 14-nov-2026)
+- `src/player/panel/panel.ts`: `PanelRowState` + `getPanelRowState(queue)` (`canBack: !history.isEmpty()`, `canShuffle`/`hasQueue: tracks.size > 0`). `buildPanelRows(isPaused, repeatMode, state?)` deshabilita `panel_back`, `panel_shuffle` y `panel_queue` cuando el estado lo indica; sin `state` todo queda habilitado (retrocompatible).
+- `src/events/ready.ts`: el estado de cola se propaga en `playerStart`/`playerPause`/`playerResume`; presencia con `ActivityType.Listening` al reproducir/reanudar, `ActivityType.Custom` (`⏸️ <título>`) en pausa y `setActivity()` al vaciar o borrar la cola.
+- `src/player/panel/panel-buttons.ts`: el refresco de `panel_loop`/`panel_shuffle` también pasa `getPanelRowState(queue)`.
+- Tests: `tests/player/panel.test.ts` (deshabilitado/habilitado, estado parcial, retrocompatibilidad y helper) y `tests/events/ready.test.ts` (presencia en play/pause/resume y limpieza). Total **77/77**.
+- Zonas congeladas intactas (`play.ts`, `youtubeDlpMix.ts`, registro de extractores en `index.ts`). Sin commit ni push: pendiente de autorización.
+
 ## Pendientes / próximos pasos
 
 1. **QA visual real** de la TUI en PowerShell con el bot vivo (`npm run dev`). Preview estático ya validado con `tsx`.
 2. **QA manual en Discord:** banner/logs, trazas `CMD`/`BOTÓN`, botones 🔁/🔀, `/clear`, `/remove`, `/skipto`, autodesconexión a los 5 min y ausencia de warnings `ephemeral`.
 3. **Bugs P0 restantes (no tocados):** panel congelado en casos borde, `/stop` que no desconecta, `/pause` toggle, `audioPreset` privado.
-4. **Arquitectura pendiente:** panel dinámico con throttle/coalescing, TUI avanzada (`log-update`/chalk), presence, web dashboard.
+4. **Arquitectura pendiente:** panel dinámico con throttle/coalescing, TUI avanzada (`log-update`/chalk), web dashboard.
 
 ## Archivos clave
 

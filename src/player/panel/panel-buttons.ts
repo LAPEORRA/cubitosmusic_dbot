@@ -13,6 +13,7 @@ import {
 import {
   buildPanelEmbed,
   buildPanelRows,
+  getPanelRowState,
   getStartedAt,
   updatePanel,
   updateEmptyPanel,
@@ -114,7 +115,11 @@ export async function handlePanelButton(
     const current = queue.currentTrack;
     if (current && channel) {
       const embed = buildPanelEmbed(current, queue, getStartedAt(queue.guild.id));
-      await updatePanel(channel, embed, buildPanelRows(queue.node.isPaused(), queue.repeatMode));
+      await updatePanel(
+        channel,
+        embed,
+        buildPanelRows(queue.node.isPaused(), queue.repeatMode, getPanelRowState(queue)),
+      );
     }
   }
 }

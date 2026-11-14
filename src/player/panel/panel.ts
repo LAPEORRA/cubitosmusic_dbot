@@ -68,11 +68,35 @@ export function buildPanelEmbed(track: Track, queue: GuildQueue, startedAt: Date
     .setFooter({ text: `CubitoMusic • ${queue.node.volume}% vol` });
 }
 
-export function buildPanelRows(isPaused: boolean, repeatMode: number = 0) {
+export type PanelRowState = {
+  canBack?: boolean;
+  canShuffle?: boolean;
+  hasQueue?: boolean;
+};
+
+export function getPanelRowState(queue: GuildQueue): PanelRowState {
+  const queuedTracks = queue.tracks?.size ?? 0;
+  const historyIsEmpty = typeof queue.history?.isEmpty === 'function'
+    ? queue.history.isEmpty()
+    : (queue.history?.tracks?.size ?? 0) === 0;
+
+  return {
+    canBack: !historyIsEmpty,
+    canShuffle: queuedTracks > 0,
+    hasQueue: queuedTracks > 0,
+  };
+}
+
+export function buildPanelRows(
+  isPaused: boolean,
+  repeatMode: number = 0,
+  state?: PanelRowState,
+) {
   const back = new ButtonBuilder()
     .setCustomId('panel_back')
     .setEmoji('⏮')
     .setStyle(ButtonStyle.Secondary);
+  if (state?.canBack === false) back.setDisabled(true);
 
   const pause = new ButtonBuilder()
     .setCustomId('panel_pause')
@@ -93,6 +117,7 @@ export function buildPanelRows(isPaused: boolean, repeatMode: number = 0) {
     .setCustomId('panel_queue')
     .setEmoji('📋')
     .setStyle(ButtonStyle.Secondary);
+  if (state?.hasQueue === false) queueBtn.setDisabled(true);
 
   const loop = new ButtonBuilder()
     .setCustomId('panel_loop')
@@ -103,6 +128,7 @@ export function buildPanelRows(isPaused: boolean, repeatMode: number = 0) {
     .setCustomId('panel_shuffle')
     .setEmoji('🔀')
     .setStyle(ButtonStyle.Secondary);
+  if (state?.canShuffle === false) shuffle.setDisabled(true);
 
   const row1 = new ActionRowBuilder<ButtonBuilder>().addComponents(back, pause, skip, stop, queueBtn);
   const row2 = new ActionRowBuilder<ButtonBuilder>().addComponents(loop, shuffle);

@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto';
-import { Client } from 'discord.js';
+import { ActivityType, Client } from 'discord.js';
 import type { GuildQueue, Player, Track } from 'discord-player';
-import { buildPanelEmbed, buildPanelRows, updatePanel, setStartedAt, getStartedAt, updateEmptyPanel } from '../player/panel/panel.js';
+import { buildPanelEmbed, buildPanelRows, getPanelRowState, updatePanel, setStartedAt, getStartedAt, updateEmptyPanel } from '../player/panel/panel.js';
 import { enableAudioPreset } from '../player/audioPreset.js';
 import {
   getSystemMetrics,
@@ -301,42 +301,52 @@ export const ready = async (client: Client, player: Player, guildId: string, spo
       queuedForMs: queuedAt === undefined ? 0 : Math.round(performance.now() - queuedAt),
     }, client);
 
+    client.user?.setActivity(track.title, { type: ActivityType.Listening });
+
     const channel = (queue.metadata as any)?.channel as any;
     if (!channel) return;
 
     setStartedAt(queue.guild.id, new Date());
     const embed = buildPanelEmbed(track, queue, getStartedAt(queue.guild.id));
-    const rows = buildPanelRows(queue.node.isPaused(), queue.repeatMode);
+    const rows = buildPanelRows(queue.node.isPaused(), queue.repeatMode, getPanelRowState(queue));
     void updatePanel(channel, embed, rows);
   });
 
   player.events.on('playerPause', (queue) => {
     const channel = (queue.metadata as any)?.channel as any;
     const current = queue.currentTrack;
+    if (current) {
+      client.user?.setActivity(`⏸️ ${current.title}`, { type: ActivityType.Custom });
+    }
     if (!channel || !current) return;
     logPlaybackEvent('player_pause', queue, {}, client);
     const embed = buildPanelEmbed(current, queue, getStartedAt(queue.guild.id));
-    const rows = buildPanelRows(true, queue.repeatMode);
+    const rows = buildPanelRows(true, queue.repeatMode, getPanelRowState(queue));
     void updatePanel(channel, embed, rows);
   });
 
   player.events.on('playerResume', (queue) => {
     const channel = (queue.metadata as any)?.channel as any;
     const current = queue.currentTrack;
+    if (current) {
+      client.user?.setActivity(current.title, { type: ActivityType.Listening });
+    }
     if (!channel || !current) return;
     logPlaybackEvent('player_resume', queue, {}, client);
     const embed = buildPanelEmbed(current, queue, getStartedAt(queue.guild.id));
-    const rows = buildPanelRows(false, queue.repeatMode);
+    const rows = buildPanelRows(false, queue.repeatMode, getPanelRowState(queue));
     void updatePanel(channel, embed, rows);
   });
 
   player.events.on('emptyQueue', (queue) => {
+    client.user?.setActivity();
     logPlaybackEvent('queue_empty', queue, {}, client);
     const channel = (queue.metadata as any)?.channel as any;
     void updateEmptyPanel(channel);
   });
 
   player.events.on('queueDelete', (queue) => {
+    client.user?.setActivity();
     logPlaybackEvent('queue_deleted', queue, {}, client);
     const channel = (queue.metadata as any)?.channel as any;
     void updateEmptyPanel(channel);

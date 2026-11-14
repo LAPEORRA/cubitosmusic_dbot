@@ -5,6 +5,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { test } from 'node:test';
 import type { Client } from 'discord.js';
+import { ActivityType } from 'discord.js';
 import type { GuildQueue, Player, Track } from 'discord-player';
 import { logTracksQueued, ready } from '../../src/events/ready.js';
 
@@ -151,4 +152,85 @@ test('deduplica errores de TUI por 2 segundos y filtra debug [NW] sin perder tra
     process.chdir(originalCwd);
     rmSync(directory, { recursive: true, force: true });
   }
+});
+
+test('actualiza la presencia al reproducir, pausar y reanudar, y la limpia al cerrar la cola', async () => {
+  const originalLog = console.log;
+  const activityCalls: unknown[][] = [];
+
+  const events = new EventEmitter();
+  events.setMaxListeners(0);
+  const player = Object.assign(new EventEmitter(), {
+    events,
+    extractors: { store: { size: 0 } },
+  }) as unknown as Player;
+
+  const client = {
+    guilds: { fetch: async () => ({ name: 'Servidor de prueba' }) },
+    user: {
+      tag: 'CubitoMusic#0000',
+      setActivity: (...args: unknown[]) => {
+        activityCalls.push(args);
+      },
+    },
+    ws: { ping: 42 },
+  } as unknown as Client;
+
+  const guildId = `guild-presence-${Date.now()}`;
+  const track = {
+    id: 'track-1',
+    title: 'One More Time',
+    duration: '5:20',
+    source: 'youtube',
+    author: 'Daft Punk',
+    url: 'https://example.com/track',
+    thumbnail: 'https://example.com/thumb.jpg',
+    requestedBy: { username: 'Santiago' },
+  } as unknown as Track;
+
+  const message = {
+    editable: true,
+    deletable: false,
+    components: [],
+    async edit() {
+      return message;
+    },
+  };
+  const queue = {
+    guild: { id: guildId },
+    metadata: {
+      channel: {
+        guildId,
+        name: 'musica',
+        send: async () => message,
+      },
+    },
+    currentTrack: track,
+    tracks: { size: 1, data: [track] },
+    history: { isEmpty: () => false, tracks: { size: 1 } },
+    repeatMode: 0,
+    node: { isPaused: () => false, volume: 70, createProgressBar: () => '0:00 / 5:20' },
+    channel: { name: 'musica' },
+  } as unknown as GuildQueue;
+
+  console.log = () => {};
+  try {
+    await ready(client, player, guildId);
+    events.emit('playerStart', queue, track);
+    events.emit('playerPause', queue);
+    events.emit('playerResume', queue);
+    events.emit('emptyQueue', queue);
+    events.emit('queueDelete', queue);
+    // Deja terminar los `updatePanel` lanzados sin await antes de restaurar la consola.
+    await new Promise((resolve) => setImmediate(resolve));
+  } finally {
+    console.log = originalLog;
+  }
+
+  assert.equal(activityCalls.length, 5);
+  assert.deepEqual(activityCalls[0], ['One More Time', { type: ActivityType.Listening }]);
+  assert.deepEqual(activityCalls[1], ['⏸️ One More Time', { type: ActivityType.Custom }]);
+  assert.deepEqual(activityCalls[2], ['One More Time', { type: ActivityType.Listening }]);
+  assert.deepEqual(activityCalls[3], []);
+  assert.deepEqual(activityCalls[4], []);
 });
