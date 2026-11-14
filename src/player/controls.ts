@@ -103,6 +103,9 @@ export function skipTo(queue: GuildQueue, position: number): Track | null {
 }
 
 export async function stopQueue(queue: GuildQueue) {
+  // Vaciar la cola antes del desmontaje evita que `discord-player` intente
+  // inicializar o extraer la siguiente pista mientras se cierra la conexión.
+  queue.tracks.clear();
   // Desconexión explícita: `queue.delete()` no siempre cierra la conexión si el
   // reproductor está en transición o pausado, y quedan conexiones huérfanas.
   queue.connection?.disconnect();

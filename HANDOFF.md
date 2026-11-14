@@ -130,6 +130,11 @@ a3c5687 refactor: reorganiza el proyecto para revisión en GitHub
 - Verificación: `npm run typecheck` ✅, `npm test` ✅ **90/90**, `npm run build` ✅. **P0 pendientes: ninguno.** Sin commit ni push.
 - **Acción requerida:** `npm run deploy-commands` para registrar `/help` (pasa de 11 a 12 comandos).
 
+### 15. Micro-optimización del desmontaje en `/stop` (OpenCode, 14-nov-2026)
+- `src/player/controls.ts`: `stopQueue()` ejecuta `queue.tracks.clear()` antes de `queue.connection?.disconnect()` y `queue.delete()`, evitando que `discord-player` intente resolver o extraer la siguiente pista durante el desmontaje.
+- `tests/player/controlsQueue.test.ts`: el test de stop ahora verifica el orden `['clear', 'disconnect', 'delete']` y que la cola queda vacía; el caso sin conexión espera `['clear', 'delete']`.
+- Verificación: `npm run typecheck` ✅, `npm test` ✅ **90/90** (misma cantidad de tests, aserciones ampliadas), `npm run build` ✅. Sin commit ni push.
+
 ## Pendientes / próximos pasos
 
 1. **Ejecutar `npm run deploy-commands`** para publicar `/help` (12 comandos en el guild).

@@ -29,6 +29,7 @@ function fakeQueue(
     at: (index: number) => store[index],
     clear: () => {
       store.length = 0;
+      events.push('clear');
     },
     removeOne: (filter: (track: FakeTrack, index: number) => boolean) => {
       const index = store.findIndex(filter);
@@ -175,15 +176,16 @@ test('backTrack no reanuda si no hay historial', async () => {
   assert.deepEqual(events, []);
 });
 
-test('stopQueue desconecta la voz antes de eliminar la cola', async () => {
-  const { queue, events } = fakeQueue(['a']);
+test('stopQueue limpia las pistas antes de desconectar y borrar la cola', async () => {
+  const { queue, events, store } = fakeQueue(['a', 'b']);
   await stopQueue(queue);
-  assert.deepEqual(events, ['disconnect', 'delete']);
+  assert.deepEqual(events, ['clear', 'disconnect', 'delete']);
+  assert.equal(store.length, 0);
 });
 
 test('stopQueue elimina la cola aunque no haya conexión activa', async () => {
   const { queue, events } = fakeQueue(['a']);
   (queue as unknown as { connection: unknown }).connection = null;
   await stopQueue(queue);
-  assert.deepEqual(events, ['delete']);
+  assert.deepEqual(events, ['clear', 'delete']);
 });
