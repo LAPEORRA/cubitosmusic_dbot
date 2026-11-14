@@ -28,10 +28,10 @@ a3c5687 refactor: reorganiza el proyecto para revisión en GitHub
 ## Verificación (todo en verde al cerrar)
 
 1. `npm run typecheck` → ✅ 0 errores (src + tests + scripts)
-2. `npm test` → ✅ **85/85 pass, 0 fail** (deduplicación de errores, trazas LIVE_TRACE, botones reactivos, presencia, P0 de stop/panel/preset)
+2. `npm test` → ✅ **90/90 pass, 0 fail** (telemetría, panel reactivo, presencia, P0 cerrados y `/help`)
 3. `npm run build` → ✅ OK (tsc → `dist/`)
 
-> `deploy-commands` ya se ejecutó: **11 comandos** registrados en el guild (`play, skip, skipto, clear, remove, stop, queue, pause, loop, shuffle, nowplaying`). Solo re-desplegar si cambia la definición (`data`) de algún comando.
+> `deploy-commands` se ejecutó con **11 comandos**; con `/help` el registro pasa a **12**. **Ejecutar `npm run deploy-commands`** para publicar `/help` en el guild.
 
 ## Trabajo completado (cronológico)
 
@@ -120,13 +120,21 @@ a3c5687 refactor: reorganiza el proyecto para revisión en GitHub
 - **Panel en casos borde:** `buildPanelEmbed` solo aplica `.setURL()`/`.setThumbnail()` con `http(s)` válidas (evita que `EmbedBuilder` lance y congele el panel). `audioTrackAdd`/`audioTracksAdd` refrescan el panel con `currentTrack` activo, actualizando el contador y habilitando 🔀/📋 al instante.
 - **`audioPreset`:** se eliminó la mutación de `filters._lastFiltersCache`; `enableAudioPreset(queue)` solo valida `queue?.node` y devuelve `true`/`false`, sin tocar `ffmpeg.setFilters`. **Nota:** el preset DSP por la vía privada ya no se aplica; queda como validación hasta definir una vía pública.
 - Tests nuevos/actualizados: `tests/player/audioPreset.test.ts` (nuevo), `tests/player/controlsQueue.test.ts` (desconexión), `tests/player/panel.test.ts` (URLs inválidas), `tests/events/ready.test.ts` (presencia `state` y refresco al encolar). Total **85/85**.
-- Verificación: `npm run typecheck` ✅, `npm test` ✅ **85/85**, `npm run build` ✅. Sin commit ni push: pendiente de autorización.
+- Verificación: `npm run typecheck` ✅, `npm test` ✅ **85/85**, `npm run build` ✅. Cerrado en el commit `968545b`; sin push.
+
+### 14. P0 de `/pause` y comando `/help` (OpenCode, 14-nov-2026)
+- `src/commands/music/pause.ts`: condición alineada con `panel_pause` (`!queue || !queue.currentTrack`), por lo que se puede pausar/reanudar durante transiciones (`buffering`); resolvedor de cola inyectable para tests (mismo patrón que `handlePanelButton`).
+- Nuevo `src/commands/utility/help.ts`: embed `0x5865f2` con footer `CubitoMusic`; comandos agrupados por categoría (`music` → 🎵 Música, `utility` → 🛠️ Utilidades, fallback capitalizado); import dinámico de `../index.js` para evitar el ciclo ESM; respuesta con `flags: 64`.
+- Registro: `/help` añadido en `src/commands/index.ts` (`category: 'utility'`, `help: 'Muestra esta lista de comandos.'`).
+- Tests: `tests/commands/pauseCommand.test.ts` (buffering, reanudar y sin pista) y `tests/commands/helpCommand.test.ts` (grupos, color/footer, `flags: 64` y cobertura de todos los comandos). Total **90/90**.
+- Verificación: `npm run typecheck` ✅, `npm test` ✅ **90/90**, `npm run build` ✅. **P0 pendientes: ninguno.** Sin commit ni push.
+- **Acción requerida:** `npm run deploy-commands` para registrar `/help` (pasa de 11 a 12 comandos).
 
 ## Pendientes / próximos pasos
 
-1. **QA visual real** de la TUI en PowerShell con el bot vivo (`npm run dev`). Preview estático ya validado con `tsx`.
-2. **QA manual en Discord:** banner/logs, trazas `CMD`/`BOTÓN`, botones 🔁/🔀, `/clear`, `/remove`, `/skipto`, autodesconexión a los 5 min y ausencia de warnings `ephemeral`.
-3. **Bug P0 restante:** `/pause` toggle (comportamiento de alternancia a revisar).
+1. **Ejecutar `npm run deploy-commands`** para publicar `/help` (12 comandos en el guild).
+2. **QA visual real** de la TUI en PowerShell con el bot vivo (`npm run dev`). Preview estático ya validado con `tsx`.
+3. **QA manual en Discord:** banner/logs, trazas `CMD`/`BOTÓN`, botones 🔁/🔀, `/clear`, `/remove`, `/skipto`, `/help`, pausa durante buffering, autodesconexión a los 5 min y ausencia de warnings `ephemeral`.
 4. **Arquitectura pendiente:** panel dinámico con throttle/coalescing, TUI avanzada (`log-update`/chalk), web dashboard.
 
 ## Archivos clave

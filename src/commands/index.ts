@@ -11,6 +11,7 @@ import { data as pauseData, pause } from './music/pause.js';
 import { data as loopData, loop } from './music/loop.js';
 import { data as shuffleData, shuffle } from './music/shuffle.js';
 import { data as nowplayingData, nowplaying } from './music/nowplaying.js';
+import { data as helpData, help } from './utility/help.js';
 
 /**
  * Registro único de comandos.
@@ -85,6 +86,12 @@ export const commands: Command[] = [
     category: 'music',
     help: 'Muestra la canción actual.',
     execute: (interaction) => nowplaying(interaction),
+  },
+  {
+    data: helpData,
+    category: 'utility',
+    help: 'Muestra esta lista de comandos.',
+    execute: (interaction) => help(interaction),
   },
 ];
 
