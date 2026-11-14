@@ -1,5 +1,6 @@
 import { SlashCommandBuilder } from 'discord.js';
 import { getQueue, requireSameVoiceChannel, requireVoiceChannel, skipTo } from '../../player/controls.js';
+import { buildCommandEmbed } from '../../utils/commandEmbed.js';
 
 export const data = new SlashCommandBuilder()
   .setName('skipto')
@@ -35,7 +36,9 @@ export async function skipto(interaction: any) {
   }
 
   return interaction.reply({
-    content: `⏭️ Saltando a **#${position}**: **${target.title}**`,
-    flags: 64,
+    embeds: [buildCommandEmbed({
+      author: 'CubitoMusic',
+      description: `⏭️ Saltando a **#${position}**: **${target.title}**`,
+    })],
   });
 }

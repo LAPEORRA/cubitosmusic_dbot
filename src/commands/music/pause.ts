@@ -1,6 +1,7 @@
 import { SlashCommandBuilder } from 'discord.js';
 import type { GuildQueue } from 'discord-player';
 import { togglePause, requireVoiceChannel, requireSameVoiceChannel, getQueue } from '../../player/controls.js';
+import { buildCommandEmbed } from '../../utils/commandEmbed.js';
 
 export const data = new SlashCommandBuilder()
   .setName('pause')
@@ -26,5 +27,10 @@ export async function pause(
   }
 
   const nowPaused = togglePause(queue);
-  await interaction.reply({ content: nowPaused ? '⏸️ Reproducción pausada.' : '▶️ Reproducción reanudada.', flags: 64 });
+  await interaction.reply({
+    embeds: [buildCommandEmbed({
+      author: 'CubitoMusic',
+      description: nowPaused ? '⏸️ Reproducción pausada.' : '▶️ Reproducción reanudada.',
+    })],
+  });
 }

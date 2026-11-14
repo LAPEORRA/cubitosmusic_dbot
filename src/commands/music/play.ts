@@ -2,6 +2,7 @@ import { SlashCommandBuilder, GuildMember } from 'discord.js';
 import { Player, useQueue } from 'discord-player';
 import { normalizeUrl } from '../../player/url.js';
 import { canPlayInChannel } from '../../player/controls.js';
+import { buildCommandEmbed } from '../../utils/commandEmbed.js';
 import { logRow, traceEvent } from '../../utils/logger.js';
 
 const GENERIC_PLAY_ERROR = '❌ No se pudo cargar esa pista o playlist. Verifica el enlace o intenta con otra búsqueda.';
@@ -31,7 +32,7 @@ export const data = new SlashCommandBuilder()
 export async function play(interaction: any, player: Player) {
   const deferStartedAt = performance.now();
   try {
-    await interaction.deferReply({ flags: 64 });
+    await interaction.deferReply();
   } catch {
     traceEvent('timing', 'play_defer_reply', {
       interactionId: interaction.id,
@@ -127,11 +128,20 @@ export async function play(interaction: any, player: Player) {
       track.requestedBy = interaction.user;
     }
 
+    const playlist = result.searchResult?.playlist;
+    const queueSize = existingQueue?.tracks.size ?? result.searchResult?.tracks.length ?? 1;
+    const addedLabel = playlist
+      ? `${result.searchResult?.tracks.length ?? 1} canciones`
+      : result.track.duration || '—';
+
     await interaction.editReply({
-      content: result.searchResult?.playlist
-        ? `🎵 **${result.searchResult.playlist.title}** — ${result.searchResult.tracks.length} canciones añadidas a la cola.`
-        : `🎵 Reproduciendo: **${result.track.title}**`,
-      flags: 64,
+      embeds: [buildCommandEmbed({
+        author: playlist ? 'Playlist añadida a la cola' : 'Añadida a la cola',
+        title: playlist ? playlist.title : result.track.title,
+        url: playlist ? playlist.url : result.track.url,
+        thumbnail: playlist ? playlist.thumbnail : result.track.thumbnail,
+        description: `${addedLabel} • Cola: ${queueSize} canciones • Pedida por <@${interaction.user.id}>`,
+      })],
     });
   } catch (error: any) {
     logRow({

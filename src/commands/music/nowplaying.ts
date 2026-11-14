@@ -1,5 +1,6 @@
 import { SlashCommandBuilder } from 'discord.js';
 import { useQueue } from 'discord-player';
+import { buildCommandEmbed } from '../../utils/commandEmbed.js';
 
 export const data = new SlashCommandBuilder()
   .setName('nowplaying')
@@ -18,12 +19,17 @@ export async function nowplaying(interaction: any) {
   }
 
   const progressBar = queue.node.createProgressBar() ?? '⏱';
-
-  await interaction.reply({
-    content: `🎵 **${currentTrack.title}** - ${currentTrack.author}\n` +
-             `⏱ Progreso: ${progressBar} ${currentTrack.duration}\n` +
-             `🔊 Volumen: ${queue.node.volume}%\n` +
-             `▶ ${queue.repeatMode ? 'Repitiendo' : 'Sin repetición'}`,
-    flags: 64,
+  const embed = buildCommandEmbed({
+    author: 'CubitoMusic',
+    title: currentTrack.title,
+    url: currentTrack.url,
+    thumbnail: currentTrack.thumbnail,
+    description: [
+      `⏱ Progreso: ${progressBar} ${currentTrack.duration}`,
+      `🔊 Volumen: ${queue.node.volume}%`,
+      `▶ ${queue.repeatMode ? 'Repitiendo' : 'Sin repetición'}`,
+    ].join('\n'),
   });
+
+  await interaction.reply({ embeds: [embed] });
 }

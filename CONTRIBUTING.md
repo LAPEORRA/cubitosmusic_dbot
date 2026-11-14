@@ -50,7 +50,7 @@ Estos archivos no se tocan salvo que el PR lo justifique explícitamente y se pr
 ### Convenciones de código
 
 - TypeScript estricto + ESM: los imports locales llevan extensión `.js`.
-- Respuestas al usuario en **español** y siempre `flags: 64` (efímeras).
+- Respuestas al usuario en **español**: confirmaciones como mini-embeds públicos (`buildCommandEmbed`) y errores/rechazos con `flags: 64` (efímeros).
 - No metas `any` nuevos sin justificar; el objetivo es ir tipando los handlers.
 - Los comandos nuevos se registran en `src/commands/index.ts` (no hay `switch` que tocar).
 

@@ -1,6 +1,7 @@
 import { SlashCommandBuilder } from 'discord.js';
 import { stopQueue, requireVoiceChannel, requireSameVoiceChannel, getQueue } from '../../player/controls.js';
 import { updateEmptyPanel } from '../../player/panel/panel.js';
+import { buildCommandEmbed } from '../../utils/commandEmbed.js';
 
 export const data = new SlashCommandBuilder()
   .setName('stop')
@@ -24,5 +25,7 @@ export async function stop(interaction: any) {
   const channel = (queue.metadata as any)?.channel as any;
   await stopQueue(queue);
   await updateEmptyPanel(channel);
-  await interaction.reply({ content: '⏹️ Música detenida y bot desconectado.', flags: 64 });
+  await interaction.reply({
+    embeds: [buildCommandEmbed({ author: 'CubitoMusic', description: '⏹️ Música detenida y bot desconectado.' })],
+  });
 }

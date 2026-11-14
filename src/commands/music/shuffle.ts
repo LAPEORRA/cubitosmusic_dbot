@@ -1,5 +1,6 @@
 import { SlashCommandBuilder } from 'discord.js';
 import { shuffleQueue, requireVoiceChannel, requireSameVoiceChannel, getQueue } from '../../player/controls.js';
+import { buildCommandEmbed } from '../../utils/commandEmbed.js';
 
 export const data = new SlashCommandBuilder()
   .setName('shuffle')
@@ -23,5 +24,7 @@ export async function shuffle(interaction: any) {
     return interaction.reply({ content: '📭 No hay canciones en la cola para mezclar.', flags: 64 });
   }
 
-  await interaction.reply({ content: '🔀 Cola mezclada.', flags: 64 });
+  await interaction.reply({
+    embeds: [buildCommandEmbed({ author: 'CubitoMusic', description: '🔀 Cola mezclada.' })],
+  });
 }

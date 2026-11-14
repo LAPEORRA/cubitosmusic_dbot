@@ -13,7 +13,7 @@ Bot de música para Discord, pensado para un servidor privado: reproduce desde *
 - Búsqueda por texto o URL en YouTube, YouTube Music, Spotify y SoundCloud.
 - Panel interactivo con botones (anterior, pausa, saltar, detener, ver cola) y progreso en vivo.
 - Cola por servidor, loop de pista, shuffle y control de volumen base.
-- Todas las respuestas en **español** y efímeras (`flags: 64`).
+- Todas las respuestas en **español**: confirmaciones como mini-embeds públicos y errores/rechazos efímeros (`flags: 64`).
 - Logs JSON de reproducción con `playbackSessionId` para depurar.
 - Registro de comandos centralizado y tipado (`src/commands/index.ts`).
 

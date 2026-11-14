@@ -1,5 +1,6 @@
 import { SlashCommandBuilder } from 'discord.js';
 import { clearQueue, getQueue, requireSameVoiceChannel, requireVoiceChannel } from '../../player/controls.js';
+import { buildCommandEmbed } from '../../utils/commandEmbed.js';
 
 export const data = new SlashCommandBuilder()
   .setName('clear')
@@ -23,5 +24,7 @@ export async function clear(interaction: any) {
     return interaction.reply({ content: '📬 La cola ya está vacía.', flags: 64 });
   }
 
-  return interaction.reply({ content: '🗑️ La cola ha sido limpiada.', flags: 64 });
+  return interaction.reply({
+    embeds: [buildCommandEmbed({ author: 'CubitoMusic', description: '🗑️ La cola ha sido limpiada.' })],
+  });
 }

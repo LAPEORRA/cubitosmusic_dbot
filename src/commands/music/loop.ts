@@ -1,5 +1,6 @@
 import { SlashCommandBuilder } from 'discord.js';
 import { toggleLoop, requireVoiceChannel, requireSameVoiceChannel, getQueue } from '../../player/controls.js';
+import { buildCommandEmbed } from '../../utils/commandEmbed.js';
 
 export const data = new SlashCommandBuilder()
   .setName('loop')
@@ -20,5 +21,10 @@ export async function loop(interaction: any) {
   }
 
   const mode = toggleLoop(queue);
-  await interaction.reply({ content: mode ? '🔁 Repetición de canción activada.' : '✅ Repetición desactivada.', flags: 64 });
+  await interaction.reply({
+    embeds: [buildCommandEmbed({
+      author: 'CubitoMusic',
+      description: mode ? '🔁 Repetición de canción activada.' : '✅ Repetición desactivada.',
+    })],
+  });
 }

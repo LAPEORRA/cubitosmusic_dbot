@@ -53,7 +53,7 @@ Fue estabilizada tras mucho trabajo. **NO modificar:**
 
 ## Entorno (`.env`)
 - Obligatorias (el bot aborta si faltan): `DISCORD_TOKEN`, `CLIENT_ID`, `GUILD_ID`
-- Opcionales: `SPOTIFY_CLIENT_ID`/`SPOTIFY_CLIENT_SECRET` (mejoran Spotify; sin ellas degrada a búsqueda)
+- Opcionales: `SPOTIFY_CLIENT_ID`/`SPOTIFY_CLIENT_SECRET` (mejoran Spotify; sin ellas degrada a búsqueda), `PANEL_DISC_GIF_URL` (GIF del autor del panel mientras suena; por defecto un GIF público de música)
 - Nunca commitear `.env`. **NO usar `YOUTUBE_COOKIE`** (el bot no la lee; las cookies de YouTube van por `agent.cookies` al registrar el extractor, hoy descartadas)
 
 ## Arquitectura (real)
@@ -83,6 +83,7 @@ src/
     ├── index.ts              — Tipos compartidos
     └── commands.ts           — Contrato Command / CommandContext / CommandCategory
 ├── utils/
+│   ├── commandEmbed.ts      — Mini-embed público de confirmaciones (color de marca, URLs validadas)
 │   └── logger.ts            — Consola TUI: ANSI, banner, tabla de logs, métricas y logs a archivo
 tests/                        — Pruebas (commands, events, player, utils) con node:test
 scripts/deploy-commands.ts    — Registro de comandos vía REST (usa el registro del router)
@@ -96,9 +97,9 @@ scripts/deploy-commands.ts    — Registro de comandos vía REST (usa el registr
 - **Control de reproducción**: `/pause`, `/skip`, `/stop`, `/loop`, `/shuffle` y los botones que modifican la reproducción solo funcionan desde el mismo canal de voz que el bot.
 - **`/stop`**: `stopQueue()` vacía la cola (`queue.tracks.clear()`), desconecta la voz y borra la cola; el comando captura `channel` antes del borrado para deshabilitar el panel.
 - **`/pause`**: alterna pausa/reanudación si existe `currentTrack` (también durante `buffering`), igual que el botón `panel_pause`.
-- **`/help`**: lista el registro (`src/commands/index.ts`) agrupado por `category`; usa import dinámico de `../index.js` para evitar el ciclo ESM y responde con `flags: 64`.
+- **`/help`**: lista el registro (`src/commands/index.ts`) agrupado por `category`; usa import dinámico de `../index.js` para evitar el ciclo ESM y responde con un mini-embed público (`buildCommandEmbed`).
 - **`/play`**: `normalizeUrl` (en `src/player/url.ts`) → elige `searchEngine` por dominio (youtube.com → ytdlp, spotify.com → spotify, soundcloud.com → soundcloud, resto auto) → `player.play(channel, query, { requestedBy, signal: AbortSignal.timeout(30_000), searchEngine, nodeOptions })`. `nodeOptions`: `metadata {channel}`, `leaveOnEmpty/leaveOnEnd: true` con `*Cooldown: 300_000` (auto-desconexión tras 5 min), `leaveOnStop: false`, `verifyFallbackStream: true`, `volume: 70` (única anti-saturación). `requestedBy` va a nivel de pista, no en `metadata`.
-- **Panel**: los eventos de `playerStart`/pause/resume en `ready.ts` re-renderizan el embed en el canal de `queue.metadata.channel`. El campo `⏱ Progreso` usa `formatPanelProgress()` (duración + cuenta regresiva `<t:UNIX:R>` al reproducir, timecodes congelados en pausa; `/nowplaying` conserva la barra ASCII). Estado por guild en Maps de `panel.ts` (`panelMessages`, `startedAtByGuild`, `panelLocks` — serializa ediciones). Si el mensaje ya no es editable, `updatePanel` lo borra y crea uno nuevo. `emptyQueue`/`queueDelete`/stop → `updateEmptyPanel` (botones deshabilitados) y `deletePanelMessage` libera los tres Maps para que no crezcan indefinidamente.
+- **Panel**: los eventos de `playerStart`/pause/resume en `ready.ts` re-renderizan el embed en el canal de `queue.metadata.channel`. El embed es compacto: `author` «Reproduciendo» + `PANEL_DISC_GIF_URL` (o «En pausa» sin icono), `description` de 2 líneas con `formatPanelProgress()` (duración + `<t:UNIX:R>` al reproducir, timecodes congelados en pausa; `/nowplaying` conserva la barra ASCII) + mención del solicitante + autor, y `footer` de estado (`Vol`, `Cola`, `Loop`) con `setTimestamp()`. Botones con etiqueta corta mantienen el prefijo `panel_*` y el `state` de `PanelRowState`. Estado por guild en Maps de `panel.ts` (`panelMessages`, `startedAtByGuild`, `panelLocks` — serializa ediciones). Si el mensaje ya no es editable, `updatePanel` lo borra y crea uno nuevo. `emptyQueue`/`queueDelete`/stop → `updateEmptyPanel` (cierre «📭 Cola finalizada» + botones deshabilitados) y `deletePanelMessage` libera los tres Maps para que no crezcan indefinidamente.
 - **Botones**: contrato de ruteo = customIds `panel_back`, `panel_pause`, `panel_skip`, `panel_stop`, `panel_queue`, `panel_loop`, `panel_shuffle`. Nuevos botones deben seguir ese prefijo `panel_`.
 
 ## Gotchas críticos (reproducción — leer antes de tocar nada)
@@ -109,7 +110,7 @@ scripts/deploy-commands.ts    — Registro de comandos vía REST (usa el registr
 5. **ESM**: imports locales con extensión `.js` (`from './foo.js'`). tsconfig: target ESNext, module NodeNext, strict.
 
 ## Convenciones
-- Respuestas al usuario en **español**, siempre `flags: 64` (ephemeral).
+- Respuestas al usuario en **español**. Las confirmaciones exitosas de comandos son **mini-embeds públicos** (`buildCommandEmbed` de `src/utils/commandEmbed.ts`, color `0x5865f2`); los **errores y rechazos** (validación de canal de voz, posición inválida, nada reproduciéndose…) usan `flags: 64` (ephemeral) para no ensuciar el chat.
 - Verificación: `npm test` + `npm run build` (typecheck) y QA manual de reproducción en Discord (canal privado; log a consola).
 - Al cambiar la definición de un comando (`data`), re-ejecutar `npm run deploy-commands`.
 - **Añadir un comando**: crear `src/commands/<categoría>/<nombre>.ts` con `data` + run, importarlo en `src/commands/index.ts` y añadir su entrada. El router y el deploy se actualizan solos (no hay `switch` ni listas manuales).

@@ -1,5 +1,6 @@
 import { SlashCommandBuilder } from 'discord.js';
 import { getQueue, removeTrack, requireSameVoiceChannel, requireVoiceChannel } from '../../player/controls.js';
+import { buildCommandEmbed } from '../../utils/commandEmbed.js';
 
 export const data = new SlashCommandBuilder()
   .setName('remove')
@@ -34,5 +35,7 @@ export async function remove(interaction: any) {
     return interaction.reply({ content: '❌ Posición inválida.', flags: 64 });
   }
 
-  return interaction.reply({ content: `🗑️ Eliminada: **${track.title}**`, flags: 64 });
+  return interaction.reply({
+    embeds: [buildCommandEmbed({ author: 'CubitoMusic', description: `🗑️ Eliminada: **${track.title}**` })],
+  });
 }

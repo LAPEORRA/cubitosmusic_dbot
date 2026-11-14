@@ -48,8 +48,8 @@ test('/pause pausa durante buffering si hay pista actual aunque no esté sonando
   await pause(interaction, () => queue);
 
   assert.deepEqual(events, ['pause']);
-  assert.equal(replies[0].content, '⏸️ Reproducción pausada.');
-  assert.equal(replies[0].flags, 64);
+  assert.equal(replies[0].flags, undefined, 'la confirmación es pública');
+  assert.equal(replies[0].embeds[0].data.description, '⏸️ Reproducción pausada.');
 });
 
 test('/pause reanuda cuando la pista actual está pausada', async () => {
@@ -59,8 +59,8 @@ test('/pause reanuda cuando la pista actual está pausada', async () => {
   await pause(interaction, () => queue);
 
   assert.deepEqual(events, ['resume']);
-  assert.equal(replies[0].content, '▶️ Reproducción reanudada.');
-  assert.equal(replies[0].flags, 64);
+  assert.equal(replies[0].flags, undefined, 'la confirmación es pública');
+  assert.equal(replies[0].embeds[0].data.description, '▶️ Reproducción reanudada.');
 });
 
 test('/pause rechaza la operación si no hay pista actual', async () => {

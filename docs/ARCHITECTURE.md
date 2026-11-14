@@ -182,7 +182,7 @@ await player.extractors.register(YouTubeDlpMixExtractor, {
 
 ## Flujo de `/play` (`src/commands/music/play.ts`)
 
-1. `interaction.deferReply({ flags: 64 })` (ephemeral) para ganar tiempo; si ya estaba respondida, aborta.
+1. `interaction.deferReply()` (público) para ganar tiempo; si ya estaba respondida, aborta. La confirmación final es un mini-embed público (`buildCommandEmbed`).
 2. Lee `query` y la normaliza con `normalizeUrl`.
 3. Selecciona `searchEngine` según el contenido de la URL:
    - `youtube.com` → `'ext:com.dfxphoenix.youtubedlp-extractor'`
@@ -242,12 +242,17 @@ diagnóstico. No imprime en la TUI y `logs/` está excluido de Git.
   - `panelMessages: guildId → Message` (mensaje del panel actual).
   - `startedAtByGuild: guildId → Date` (cuándo empezó la pista actual).
   - `panelLocks: guildId → Promise` (serializa ediciones para evitar carreras).
-- `buildPanelEmbed(track, queue, startedAt, fallbackRequestedBy?)` → embed con progreso, cola, comandos;
-  el solicitante sale de `track.requestedBy`.
-- `buildPanelRows(isPaused, repeatMode = 0)` → **dos filas**: `panel_back`, `panel_pause`, `panel_skip`,
-  `panel_stop`, `panel_queue` + `panel_loop` (Success si `repeatMode !== 0`) y `panel_shuffle`.
+- `buildPanelEmbed(track, queue, startedAt, fallbackRequestedBy?)` → embed compacto estilo MatchBox:
+  - `author`: «Reproduciendo» + `iconURL` con `SPINNING_DISC_GIF` (configurable por `PANEL_DISC_GIF_URL`) o «En pausa» sin icono.
+  - `description` de 2 líneas: `formatPanelProgress(track, queue) • <@solicitante>` y `Por **autor**`.
+  - `footer`: `Reproduciendo|En pausa • Vol N% • Cola: N • Loop: on|off` y `setTimestamp()`.
+  - `startedAt` se conserva por compatibilidad; el tiempo ya no va como campo.
+- `formatPanelProgress(track, queue, nowMs?)` → duración + `<t:UNIX:R>` al reproducir, `⏸️ MM:SS / MM:SS` en pausa y `En vivo` sin duración.
+- `buildPanelRows(isPaused, repeatMode = 0, state?)` → **dos filas** con etiqueta corta: `panel_back` (Atrás),
+  `panel_pause` (Pausar/Reanudar), `panel_skip` (Saltar), `panel_stop` (Stop), `panel_queue` (Cola) +
+  `panel_loop` (Success si `repeatMode !== 0`) y `panel_shuffle` (Mezclar). `state` deshabilita por contexto.
 - `updatePanel(channel, embed, rows)` → edita el panel existente o crea uno nuevo (serializado por `withPanelLock`); `rows` es un array de `ActionRowBuilder`.
-- `updateEmptyPanel(channel)` → deshabilita los botones de **todas** las filas, pone "Cola vacía" y llama a `deletePanelMessage` (libera `Message`, `startedAt` y `panelLocks`).
+- `updateEmptyPanel(channel)` → deshabilita los botones de **todas** las filas, muestra el cierre «📭 Cola finalizada» y llama a `deletePanelMessage` (libera `Message`, `startedAt` y `panelLocks`).
 
 ### `panel-buttons.ts` (`handlePanelButton`)
 - Valida voz + cola activa, `deferUpdate()`, ejecuta la acción y deja el re-render a los eventos
@@ -309,13 +314,15 @@ las canciones.
    `getCommand(commandName)` desde el registro de `src/commands/index.ts` y se ejecuta con
    `execute(interaction, { player })`. Añadir un comando no requiere tocar el router.
 3. Errores genéricos: `replyWithError` elige `editReply`, `followUp` o `reply` según el estado.
-4. Todo con `flags: 64` (EPHEMERAL).
+4. Rechazos y errores con `flags: 64` (EPHEMERAL); las confirmaciones exitosas de comandos son mini-embeds públicos.
 
 ---
 
 ## Manejo de errores y directrices de respuestas
 
-- Todas las respuestas usan `flags: 64` (ephemeral) para no llenar el canal.
+- Las **confirmaciones exitosas** de comandos son mini-embeds públicos (`buildCommandEmbed`, color `0x5865f2`).
+- Los **errores y rechazos** (validación de canal de voz, posición inválida, nada reproduciéndose, etc.)
+  usan `flags: 64` (ephemeral) para no llenar el canal.
 - `play.ts` distingue: `AbortError`/`Cancelled` (timeout → "tardó demasiado"),
   mensaje "Tiempo de espera agotado", y demás como error genérico.
 - `interactionCreate.ts` registra errores y usa `replyWithError` para responder según el

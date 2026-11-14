@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { help } from '../../src/commands/utility/help.js';
 
-test('/help lista los comandos agrupados por categoría y responde con flags 64', async () => {
+test('/help lista los comandos agrupados por categoría y responde de forma pública', async () => {
   const replies: any[] = [];
   const interaction = {
     async reply(payload: any) {
@@ -13,10 +13,11 @@ test('/help lista los comandos agrupados por categoría y responde con flags 64'
   await help(interaction);
 
   assert.equal(replies.length, 1);
-  assert.equal(replies[0].flags, 64);
+  assert.equal(replies[0].flags, undefined, 'la respuesta es pública');
 
   const embed = replies[0].embeds[0];
   assert.equal(embed.data.color, 0x5865f2);
+  assert.equal(embed.data.title, '📖 Comandos de CubitoMusic');
   assert.equal(embed.data.footer.text, 'CubitoMusic');
 
   const fields = embed.data.fields ?? [];

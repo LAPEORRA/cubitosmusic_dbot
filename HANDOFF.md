@@ -5,12 +5,13 @@
 ## Estado actual
 
 - **Carpeta activa:** `D:\cubitosmusic` (reubicado desde `D:\Proyectos_Opencode`).
-- **Git:** rama `main`, `HEAD` en `4844cc3` (`fix(player): vacía la cola antes de desconectar en /stop`), **sincronizado con `origin/main`** y con cambios locales sin commit: `src/player/panel/panel.ts`, `tests/player/panel.test.ts`, `AGENTS.md` y `HANDOFF.md` (bloque 16). Incluye los bloques 12–15: panel reactivo y presencia, P0 de stop/panel/preset, `/pause` + `/help` y el vaciado de cola en `stopQueue`.
-- **Base previa:** `158d410` (`feat(commands): añade /help dinámico y unifica la validación de /pause`).
+- **Git:** rama `main`, `HEAD` en `2291c3e` (`feat(panel): reemplaza la barra ASCII por duración y cuenta regresiva nativa`), **sincronizado con `origin/main`** y con cambios locales sin commit de los bloques 17–18 (panel MatchBox y mini-embeds públicos en comandos). Incluye los bloques 12–16: panel reactivo y presencia, P0 de stop/panel/preset, `/pause` + `/help`, vaciado de cola en `stopQueue` y cuenta regresiva nativa.
+- **Base previa:** `4844cc3` (`fix(player): vacía la cola antes de desconectar en /stop`).
 - **Remoto:** `https://github.com/LAPEORRA/cubitosmusic_dbot.git` (`origin/main`).
 
 ### Últimos commits
 ```
+2291c3e feat(panel): reemplaza la barra ASCII por duración y cuenta regresiva nativa
 4844cc3 fix(player): vacía la cola antes de desconectar en /stop
 158d410 feat(commands): añade /help dinámico y unifica la validación de /pause
 968545b fix(player): cierra P0 de stop, panel y audioPreset; presencia en pausa
@@ -28,7 +29,7 @@ cd30a8c feat: comandos de gestión de cola clear, remove y skipto
 ## Verificación (todo en verde al cerrar)
 
 1. `npm run typecheck` → ✅ 0 errores (src + tests + scripts)
-2. `npm test` → ✅ **97/97 pass, 0 fail** (telemetría, panel reactivo, presencia, P0 cerrados, `/help` y cuenta regresiva del panel)
+2. `npm test` → ✅ **102/102 pass, 0 fail** (telemetría, panel reactivo, presencia, P0 cerrados, `/help`, cuenta regresiva, rediseño MatchBox y mini-embeds públicos)
 3. `npm run build` → ✅ OK (tsc → `dist/`)
 
 > `deploy-commands` ejecutado: **12 comandos** registrados en el guild, incluido `/help`. Solo re-desplegar si cambia la definición (`data`) de algún comando.
@@ -144,10 +145,31 @@ cd30a8c feat: comandos de gestión de cola clear, remove y skipto
 - Tests en `tests/player/panel.test.ts`: helper `fakeTimedQueue`, reproducción normal, reanudación con progreso parcial (`nowMs + (totalMs - currentMs)`), pausa con y sin timestamp, fallback sin timestamp, stream en vivo (`durationMS: 0`) y campo del embed sin barra ASCII. Total **97/97**.
 - Verificación: `npm run typecheck` ✅, `npm test` ✅ **97/97**, `npm run build` ✅. Zonas congeladas intactas (`play.ts`, `youtubeDlpMix.ts`, registro de extractores en `index.ts` y `/nowplaying`). Cambios locales sin commit.
 
+### 17. Rediseño MatchBox del panel y cierre de sesión (OpenCode, 14-nov-2026)
+- `src/player/panel/panel.ts`:
+  - `SPINNING_DISC_GIF`: constante configurable por `PANEL_DISC_GIF_URL` (GIF público por defecto, verificado con HTTP 200; sustituible por un disco/vinilo girando desde `.env`).
+  - `buildPanelEmbed` pasa a formato compacto: `author` «Reproduciendo» + `iconURL` animado al sonar y «En pausa» **sin** icono al pausar; se eliminan los 5 campos (`⏱ Progreso`, `📌 Añadida`, `👤 Solicitada por`, `📋 Cola`, `🛠 Comandos`); `description` de 2 líneas (`formatPanelProgress • <@solicitante>` + `Por **autor**`) y `footer` de estado (`Reproduciendo|En pausa • Vol N% • Cola: N • Loop: on|off`) con `setTimestamp()`.
+  - `formatPanelProgress` se mantiene intacto (duración + `<t:UNIX:R>` al reproducir, `⏸️ MM:SS / MM:SS` en pausa, `En vivo` sin duración).
+  - Botones con etiqueta corta y mismo contrato: `⏮️ Atrás`, `⏸️/▶️ Pausar|Reanudar`, `⏭️ Saltar`, `⏹️ Stop`, `📋 Cola`, `🔁 Loop`, `🔀 Mezclar`; `PanelRowState` sigue deshabilitando por contexto.
+  - `updateEmptyPanel` muestra el cierre «📭 Cola finalizada» con explicación de la desconexión, `footer` `CubitoMusic` y `setTimestamp()`.
+  - Se eliminó `timeAgo` (ya no había campo «Añadida»); `startedAt` queda documentado como parámetro de compatibilidad.
+- Tests: `tests/player/panel.test.ts` cubre mención `<@id>`, fallback username/cola/`Desconocido`, descripción compacta, progreso con `<t:UNIX:R>`, autor con/sin GIF, footer de estado y etiquetas de botones; `tests/events/ready.test.ts` valida el contador de cola en el footer. Total **100/100**.
+- Docs sincronizadas: `AGENTS.md` (flujo del panel + `PANEL_DISC_GIF_URL`) y `docs/ARCHITECTURE.md` (sección `panel.ts`).
+- Verificación: `npm run typecheck` ✅, `npm test` ✅ **100/100**, `npm run build` ✅. Zonas congeladas intactas (`play.ts`, `youtubeDlpMix.ts`, registro de extractores en `index.ts`). Cambios locales sin commit.
+
+### 18. Mini-embeds públicos en comandos (OpenCode, 14-nov-2026)
+- Nuevo `src/utils/commandEmbed.ts`: `buildCommandEmbed(opts)` crea el mini-embed estándar (color `0x5865f2`, `author`/`title`/`description`/`footer` opcionales y `url`/`thumbnail` solo si son `http(s)`, evitando que `EmbedBuilder` lance).
+- **`/play`** (presentación únicamente; lógica congelada intacta): `deferReply()` pasa a público y la confirmación es un mini-embed con `author` «Añadida a la cola»/«Playlist añadida a la cola», título (pista o playlist), `url`/`thumbnail` validados y `description` `duración|canciones • Cola: N canciones • Pedida por <@id>`. Las validaciones tempranas y el `catch` conservan su respuesta de error.
+- Resto de comandos (`skip`, `skipto`, `clear`, `remove`, `stop`, `pause`, `loop`, `shuffle`, `queue`, `nowplaying`, `help`): las confirmaciones se envían como mini-embeds **sin** `flags: 64`; los rechazos (`❌ Necesitas estar en un canal de voz`, `No hay nada reproduciéndose`, `Posición inválida`, cola vacía, etc.) mantienen `flags: 64`.
+- `/queue` conserva `allowedMentions: { parse: [] }` dentro del embed; `/nowplaying` mantiene la barra ASCII y `/help` agrupa las categorías en su embed público.
+- Tests: `tests/commands/queueCommand.test.ts` y `tests/commands/helpCommand.test.ts` verifican respuestas públicas (sin `flags`); `tests/commands/pauseCommand.test.ts` distingue confirmación pública y rechazo efímero; nuevo `tests/utils/commandEmbed.test.ts` cubre color y validación de URLs. Total **102/102**.
+- Convenciones sincronizadas en `AGENTS.md`, `docs/ARCHITECTURE.md`, `README.md`, `CONTRIBUTING.md` y `.github/PULL_REQUEST_TEMPLATE.md` (confirmaciones públicas, errores ephemeral).
+- Verificación: `npm run typecheck` ✅, `npm test` ✅ **102/102**, `npm run build` ✅. Zonas congeladas respetadas (`play.ts` solo cambió la presentación; `youtubeDlpMix.ts` y registro de extractores intactos). Cambios locales sin commit.
+
 ## Pendientes / próximos pasos
 
 1. **QA visual real** de la TUI en PowerShell con el bot vivo (`npm run dev`). Preview estático ya validado con `tsx`.
-2. **QA manual en Discord:** banner/logs, trazas `CMD`/`BOTÓN`, botones 🔁/🔀, `/clear`, `/remove`, `/skipto`, `/help`, pausa durante buffering, autodesconexión a los 5 min y ausencia de warnings `ephemeral`. Validar además la cuenta regresiva `<t:…:R>` del panel (reproducir, pausar, reanudar y dejar terminar una pista).
+2. **QA manual en Discord:** banner/logs, trazas `CMD`/`BOTÓN`, botones 🔁/🔀, `/clear`, `/remove`, `/skipto`, `/help`, pausa durante buffering, autodesconexión a los 5 min y ausencia de warnings `ephemeral`. Validar los mini-embeds públicos de confirmación (visibles para el canal) frente a los rechazos efímeros, además del panel MatchBox (GIF del autor al reproducir y su ausencia en pausa, mención del solicitante, footer de estado, etiquetas de botones y cuenta regresiva `<t:…:R>` al pausar/reanudar) y el cierre «📭 Cola finalizada». Opcional: fijar un disco/vinilo girando con `PANEL_DISC_GIF_URL`.
 3. **Arquitectura pendiente:** panel dinámico con throttle/coalescing, TUI avanzada (`log-update`/chalk), web dashboard.
 
 ## Archivos clave
@@ -170,7 +192,7 @@ cd30a8c feat: comandos de gestión de cola clear, remove y skipto
    - `queue.tracks.removeOne()` recibe un predicado; `queue.node.skipTo()` acepta índice numérico.
    - La caché de búsquedas dura ~5 h y puede reutilizar `Track` con `requestedBy` antiguo (por eso se refresca).
 6. **ESM estricto:** imports locales con `.js` (`from './foo.js'`); tsconfig `NodeNext` + `strict`.
-7. **Respuestas al usuario:** español, siempre `flags: 64` (ephemeral). **No** usar la propiedad `ephemeral: true` (deprecada en discord.js v14.27).
+7. **Respuestas al usuario:** español; confirmaciones como mini-embeds públicos (`buildCommandEmbed`) y errores/rechazos con `flags: 64` (ephemeral). **No** usar la propiedad `ephemeral: true` (deprecada en discord.js v14.27).
 
 ## Lecciones del entorno
 

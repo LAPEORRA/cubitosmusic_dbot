@@ -1,4 +1,5 @@
-import { EmbedBuilder, SlashCommandBuilder } from 'discord.js';
+import { SlashCommandBuilder } from 'discord.js';
+import { buildCommandEmbed } from '../../utils/commandEmbed.js';
 
 export const data = new SlashCommandBuilder()
   .setName('help')
@@ -26,14 +27,16 @@ export async function help(interaction: any) {
     grouped.set(label, lines);
   }
 
-  const embed = new EmbedBuilder()
-    .setColor(0x5865f2)
-    .setTitle('📖 Comandos de CubitoMusic')
-    .setFooter({ text: 'CubitoMusic' });
+  const embed = buildCommandEmbed({
+    author: 'CubitoMusic',
+    title: '📖 Comandos de CubitoMusic',
+    description: 'Todos los comandos disponibles, agrupados por categoría.',
+    footer: 'CubitoMusic',
+  });
 
   for (const [label, lines] of grouped) {
     embed.addFields({ name: label, value: lines.join('\n') });
   }
 
-  return interaction.reply({ embeds: [embed], flags: 64 });
+  return interaction.reply({ embeds: [embed] });
 }

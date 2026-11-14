@@ -1,5 +1,6 @@
 import { SlashCommandBuilder } from 'discord.js';
 import { skipTrack, requireVoiceChannel, requireSameVoiceChannel, getQueue } from '../../player/controls.js';
+import { buildCommandEmbed } from '../../utils/commandEmbed.js';
 
 export const data = new SlashCommandBuilder()
   .setName('skip')
@@ -23,5 +24,7 @@ export async function skip(interaction: any) {
     return interaction.reply({ content: '❌ No hay nada reproduciéndose.', flags: 64 });
   }
 
-  await interaction.reply({ content: '⏭️ Pista saltada.', flags: 64 });
+  await interaction.reply({
+    embeds: [buildCommandEmbed({ author: 'CubitoMusic', description: '⏭️ Pista saltada.' })],
+  });
 }
