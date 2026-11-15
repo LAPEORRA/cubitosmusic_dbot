@@ -65,7 +65,7 @@ src/
 │   ├── index.ts              — Registro tipado (fuente única para router y deploy)
 │   ├── music/                — Cada handler exporta `data` + run
 │   │   ├── play.ts           — /play <url|búsqueda> (único que llama a player.play)
-│   │   ├── skip.ts stop.ts queue.ts pause.ts loop.ts shuffle.ts nowplaying.ts
+│   │   ├── skip.ts stop.ts queue.ts pause.ts loop.ts shuffle.ts nowplaying.ts volume.ts
 │   └── utility/help.ts       — /help dinámico (agrupa el registro por categoría)
 ├── events/
 │   ├── ready.ts              — Eventos del Player, logs JSON de reproducción y render del panel
@@ -95,9 +95,10 @@ scripts/deploy-commands.ts    — Registro de comandos vía REST (usa el registr
   `playbackSessionId`; incluyen secuencia observada, cola pendiente y tiempo desde que se encoló cada pista.
 
 ## Flujos clave
-- **Control de reproducción**: `/pause`, `/skip`, `/stop`, `/loop`, `/shuffle` y los botones que modifican la reproducción solo funcionan desde el mismo canal de voz que el bot.
+- **Control de reproducción**: `/pause`, `/skip`, `/stop`, `/loop`, `/shuffle`, `/volume` y los botones que modifican la reproducción solo funcionan desde el mismo canal de voz que el bot.
 - **`/stop`**: `stopQueue()` vacía la cola (`queue.tracks.clear()`), desconecta la voz y borra la cola; el comando captura `channel` antes del borrado para deshabilitar el panel.
 - **`/pause`**: alterna pausa/reanudación si existe `currentTrack` (también durante `buffering`), igual que el botón `panel_pause`.
+- **`/volume`**: `setQueueVolume(queue, porcentaje)` valida entero 1–100 (si no, `null`), aplica `queue.node.setVolume()`, refresca el panel activo (footer `Vol N%`) y confirma con mini-embed público.
 - **`/help`**: lista el registro (`src/commands/index.ts`) agrupado por `category`; usa import dinámico de `../index.js` para evitar el ciclo ESM y responde con un mini-embed público (`buildCommandEmbed`).
 - **`/play`**: `normalizeUrl` (en `src/player/url.ts`) → elige `searchEngine` por dominio (youtube.com → ytdlp, spotify.com → spotify, soundcloud.com → soundcloud, resto auto) → `player.play(channel, query, { requestedBy, signal: AbortSignal.timeout(30_000), searchEngine, nodeOptions })`. `nodeOptions`: `metadata {channel}`, `leaveOnEmpty/leaveOnEnd: true` con `*Cooldown: 300_000` (auto-desconexión tras 5 min), `leaveOnStop: false`, `verifyFallbackStream: true`, `volume: 70` (única anti-saturación). `requestedBy` va a nivel de pista, no en `metadata`.
 - **Panel**: los eventos de `playerStart`/pause/resume en `ready.ts` re-renderizan el embed en el canal de `queue.metadata.channel`. El embed es compacto: `author` «Reproduciendo» + `PANEL_DISC_GIF_URL` (o «En pausa» sin icono), `description` de 2 líneas con `formatPanelProgress()` (duración + `<t:UNIX:R>` al reproducir, timecodes congelados en pausa; `/nowplaying` conserva la barra ASCII) + mención del solicitante + autor, y `footer` de estado (`Vol`, `Cola`, `Loop`) con `setTimestamp()`. Botones con etiqueta corta mantienen el prefijo `panel_*` y el `state` de `PanelRowState`. Estado por guild en Maps de `panel.ts` (`panelMessages`, `startedAtByGuild`, `panelLocks` — serializa ediciones). Si el mensaje ya no es editable, `updatePanel` lo borra y crea uno nuevo. `emptyQueue`/`queueDelete`/stop → `updateEmptyPanel` (cierre «📭 Cola finalizada» + botones deshabilitados) y `deletePanelMessage` libera los tres Maps para que no crezcan indefinidamente. El `messageId` del panel se persiste en `logs/panel-state.json` (`setPanelMessage`/`deletePanelMessage`); al arrancar, `ready.ts` llama a `cleanupOrphanedPanels(client)` para cerrar paneles huérfanos de sesiones anteriores.

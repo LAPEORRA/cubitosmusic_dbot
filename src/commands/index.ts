@@ -11,6 +11,7 @@ import { data as pauseData, pause } from './music/pause.js';
 import { data as loopData, loop } from './music/loop.js';
 import { data as shuffleData, shuffle } from './music/shuffle.js';
 import { data as nowplayingData, nowplaying } from './music/nowplaying.js';
+import { data as volumeData, volume } from './music/volume.js';
 import { data as helpData, help } from './utility/help.js';
 
 /**
@@ -86,6 +87,12 @@ export const commands: Command[] = [
     category: 'music',
     help: 'Muestra la canción actual.',
     execute: (interaction) => nowplaying(interaction),
+  },
+  {
+    data: volumeData,
+    category: 'music',
+    help: 'Ajusta el volumen de reproducción (1-100%).',
+    execute: (interaction) => volume(interaction),
   },
   {
     data: helpData,

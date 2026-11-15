@@ -5,12 +5,13 @@
 ## Estado actual
 
 - **Carpeta activa:** `D:\cubitosmusic` (reubicado desde `D:\Proyectos_Opencode`).
-- **Git:** rama `main`, `HEAD` en `105f720` (`feat(shutdown): apagado ordenado ante Ctrl+C y cierre de consola`), **sincronizado con `origin/main`** y con cambios locales sin commit del bloque 2 (persistencia del panel). Los bloques 19 ya están publicados (`105f720`).
+- **Git:** rama `main`, `HEAD` en `27eec90` (`feat(panel): persiste messageId y cierra paneles huérfanos al arrancar`), **sincronizado con `origin/main`** y con cambios locales sin commit del bloque `/volume`. Los bloques 19 y 20 ya están publicados (`105f720`, `27eec90`).
 - **Base previa:** `2291c3e` (`feat(panel): reemplaza la barra ASCII por duración y cuenta regresiva nativa`).
 - **Remoto:** `https://github.com/LAPEORRA/cubitosmusic_dbot.git` (`origin/main`).
 
 ### Últimos commits
 ```
+27eec90 feat(panel): persiste messageId y cierra paneles huérfanos al arrancar
 105f720 feat(shutdown): apagado ordenado ante Ctrl+C y cierre de consola
 28469f0 feat(commands): confirmaciones públicas como mini-embeds y errores efímeros
 79a386c feat(panel): rediseña el embed al estilo MatchBox y mejora el cierre de sesión
@@ -32,10 +33,10 @@ cd30a8c feat: comandos de gestión de cola clear, remove y skipto
 ## Verificación (todo en verde al cerrar)
 
 1. `npm run typecheck` → ✅ 0 errores (src + tests + scripts)
-2. `npm test` → ✅ **109/109 pass, 0 fail** (telemetría, panel, presencia, P0, `/help`, mini-embeds públicos, apagado ordenado y persistencia del panel)
+2. `npm test` → ✅ **115/115 pass, 0 fail** (telemetría, panel, presencia, P0, `/help`, mini-embeds públicos, apagado ordenado, persistencia del panel y `/volume`)
 3. `npm run build` → ✅ OK (tsc → `dist/`)
 
-> `deploy-commands` ejecutado: **12 comandos** registrados en el guild, incluido `/help`. Solo re-desplegar si cambia la definición (`data`) de algún comando.
+> `deploy-commands` ejecutado: **13 comandos** registrados en el guild, incluidos `/help` y `/volume`. Solo re-desplegar si cambia la definición (`data`) de algún comando.
 
 ## Trabajo completado (cronológico)
 
@@ -187,6 +188,14 @@ cd30a8c feat: comandos de gestión de cola clear, remove y skipto
 - Tests nuevos en `tests/player/panel.test.ts`: persistencia/borrado y limpieza de huérfanos (existente y ausente). Total **109/109**.
 - Docs sincronizadas: `AGENTS.md` y `docs/ARCHITECTURE.md`.
 - Verificación: `npm run typecheck` ✅, `npm test` ✅ **109/109**, `npm run build` ✅. Zonas congeladas intactas. Cambios locales sin commit.
+
+### 21. Comando `/volume` (OpenCode, 15-nov-2026)
+- `src/player/controls.ts`: `setQueueVolume(queue, volume)` valida entero 1–100 (`!Number.isInteger`, `<1`, `>100` → `null`), aplica `queue.node.setVolume(volume)` y devuelve el nivel.
+- `src/commands/music/volume.ts`: `/volume <porcentaje>` con validaciones efímeras estándar (canal de voz, reproducción activa, mismo canal), refresco inmediato del panel (`buildPanelEmbed` + `buildPanelRows` + `updatePanel`, footer `Vol N%`) y confirmación pública con `buildCommandEmbed` (`🔊 Volumen ajustado al **N%**.`).
+- Registro en `src/commands/index.ts` (`category: 'music'`, help `Ajusta el volumen de reproducción (1-100%).`). Total **13 comandos**.
+- Tests `tests/commands/volumeCommand.test.ts`: rechazos efímeros, ajuste exitoso con footer `Vol 45%` y respuesta pública, y validación de rango de `setQueueVolume` (`0`, `101`, `NaN` → `null`). Total **115/115**.
+- Docs sincronizadas: `AGENTS.md` y `docs/ARCHITECTURE.md`.
+- Verificación: `npm run typecheck` ✅, `npm test` ✅ **115/115**, `npm run build` ✅, `npm run deploy-commands` ✅ (13 comandos). Zonas congeladas intactas. Cambios locales sin commit.
 
 ## Pendientes / próximos pasos
 

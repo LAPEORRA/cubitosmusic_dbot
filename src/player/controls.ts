@@ -71,6 +71,13 @@ export function toggleLoop(queue: GuildQueue) {
   return queue.repeatMode;
 }
 
+/** Ajusta el volumen de la cola (1-100). Devuelve el nivel aplicado o `null` si es inválido. */
+export function setQueueVolume(queue: GuildQueue, volume: number): number | null {
+  if (!Number.isInteger(volume) || volume < 1 || volume > 100) return null;
+  queue.node.setVolume(volume);
+  return volume;
+}
+
 export function shuffleQueue(queue: GuildQueue): boolean {
   if (!queue.tracks.data.length) return false;
   queue.tracks.shuffle();

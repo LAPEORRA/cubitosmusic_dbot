@@ -23,7 +23,7 @@
 | Radio mixes YouTube (`list=RD*`) como playlist | ✅ |
 | Spotify / SoundCloud (extractores defaults) | ✅ registrado (Spotify sin credenciales: degradado) |
 | `/skip`, `/stop`, `/pause`/`/resume` | ✅ |
-| `/loop`, `/shuffle`, `/nowplaying`, `/queue` | ✅ |
+| `/loop`, `/shuffle`, `/nowplaying`, `/queue`, `/volume` | ✅ |
 | `/clear`, `/remove`, `/skipto` (gestión de colas largas) | ✅ |
 | Panel interactivo con botones (⏮ ⏸ ⏭ ⏹ 📋 + 🔁 🔀) | ✅ |
 | Anti-saturación de audio (volumen 70%, sin filtros ffmpeg) | ✅ |
@@ -121,7 +121,8 @@ npm run deploy-commands    # Registra los slash commands en la guild (REST)
 │   │       ├── clear.ts          — /clear (vacía la cola)
 │   │       ├── remove.ts         — /remove <posicion> (elimina una pista)
 │   │       ├── skipto.ts         — /skipto <posicion> (salta descartando anteriores)
-│   │       └── nowplaying.ts     — /nowplaying (info + barra de progreso)
+│   │       ├── nowplaying.ts     — /nowplaying (info + barra de progreso)
+│   │       └── volume.ts         — /volume <porcentaje> (ajusta volumen y refresca el panel)
 │   ├── events/
 │   │   ├── ready.ts              — Suscripción a eventos del Player + panel
 │   │   ├── interactionCreate.ts  — Router de interacciones (botones y slash commands)
@@ -318,6 +319,14 @@ las canciones.
 
 ---
 
+## Volumen (`src/commands/music/volume.ts`)
+
+- `/volume <porcentaje>` (entero 1–100) exige canal de voz, reproducción activa y el mismo canal que el bot.
+- `setQueueVolume(queue, volume)` en `src/player/controls.ts` valida entero 1–100 y aplica `queue.node.setVolume()`; devuelve `null` si es inválido.
+- Al aplicarlo, refresca el panel activo (footer `Vol N%`) y confirma con mini-embed público; los rechazos usan `flags: 64`.
+
+---
+
 ## Apagado ordenado (`src/utils/shutdown.ts`)
 
 - `registerGracefulShutdown(client, player)` se llama en `src/index.ts` tras `client.login(...)`.
@@ -427,7 +436,7 @@ las canciones.
    - `/play` con una playlist larga (comprobar `/queue` con N canciones).
    - `/play` con un radio mix `list=RD...` (debe encolar muchas canciones).
    - Botones del panel: ⏮ ⏸ ⏭ ⏹ 📋.
-   - `/loop`, `/shuffle`, `/nowplaying`, `/pause`, `/skip`, `/stop`, `/queue`.
+   - `/loop`, `/shuffle`, `/nowplaying`, `/pause`, `/skip`, `/stop`, `/queue`, `/volume 45`.
    - `/clear`, `/remove <posicion>`, `/skipto <posicion>` con una cola de varios temas.
 3. Si algo falla, revisar el log del proceso (consola o redirección p.ej.
    `npx tsx src/index.ts > /tmp/bot-ytdlp.log 2>&1`).
