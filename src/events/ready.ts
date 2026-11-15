@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { ActivityType, Client } from 'discord.js';
 import type { GuildQueue, Player, Track } from 'discord-player';
-import { buildPanelEmbed, buildPanelRows, getPanelRowState, updatePanel, setStartedAt, getStartedAt, updateEmptyPanel } from '../player/panel/panel.js';
+import { buildPanelEmbed, buildPanelRows, getPanelRowState, updatePanel, setStartedAt, getStartedAt, updateEmptyPanel, cleanupOrphanedPanels } from '../player/panel/panel.js';
 import { enableAudioPreset } from '../player/audioPreset.js';
 import {
   getSystemMetrics,
@@ -267,6 +267,8 @@ export const ready = async (client: Client, player: Player, guildId: string, spo
     extractorCount: player.extractors.store.size,
     client,
   });
+
+  void cleanupOrphanedPanels(client);
 
   player.events.on('queueCreate', (queue) => {
     const sessionId = getPlaybackSessionId(queue);

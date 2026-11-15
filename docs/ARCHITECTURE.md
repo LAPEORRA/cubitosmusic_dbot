@@ -331,6 +331,16 @@ las canciones.
 
 ---
 
+## Persistencia del panel y limpieza de huérfanos (`src/player/panel/panel.ts`)
+
+- El `messageId` del panel se persiste en `logs/panel-state.json` (mapa `{ [guildId]: { channelId, messageId } }`).
+- `setPanelMessage(guildId, message, stateFilePath?)` guarda la entrada (crea el directorio si falta; ignora errores de E/S).
+- `deletePanelMessage(guildId, stateFilePath?)` elimina la entrada.
+- `buildClosedPanelEmbed()` es el embed compartido «📭 Cola finalizada» (color `0x5865f2`, desconexión, footer `CubitoMusic`, `setTimestamp()`), usado por `updateEmptyPanel` y por la limpieza.
+- `cleanupOrphanedPanels(client, stateFilePath?)` se llama en `ready.ts` tras el banner: lee el JSON, intenta obtener canal/mensaje, si el mensaje existe y es editable lo edita con `buildClosedPanelEmbed()` y deshabilita sus `ActionRow`; independientemente del resultado elimina la entrada para no reintentarla. Ignora archivos inexistentes/vacíos/corruptos y errores de Discord (10003/10008).
+
+---
+
 ## Manejo de errores y directrices de respuestas
 
 - Las **confirmaciones exitosas** de comandos son mini-embeds públicos (`buildCommandEmbed`, color `0x5865f2`).

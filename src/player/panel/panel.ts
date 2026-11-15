@@ -1,6 +1,9 @@
 import { ActionRowBuilder, ButtonBuilder, ButtonStyle, ComponentType, EmbedBuilder, Message } from 'discord.js';
+import type { Client } from 'discord.js';
 import { GuildQueue, Track } from 'discord-player';
 import { logRow } from '../../utils/logger.js';
+import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { dirname, join } from 'node:path';
 
 const panelMessages = new Map<string, Message>();
 const startedAtByGuild = new Map<string, Date>();
@@ -22,14 +25,76 @@ export function setStartedAt(guildId: string, date: Date) {
   startedAtByGuild.set(guildId, date);
 }
 
-export function setPanelMessage(guildId: string, message: Message) {
-  panelMessages.set(guildId, message);
+const DEFAULT_PANEL_STATE_PATH = join(process.cwd(), 'logs', 'panel-state.json');
+
+function resolvePanelStatePath(stateFilePath?: string | { stateFilePath?: string }): string {
+  if (typeof stateFilePath === 'string' && stateFilePath.trim()) return stateFilePath;
+  if (stateFilePath && typeof stateFilePath === 'object' && 'stateFilePath' in stateFilePath) {
+    const candidate = (stateFilePath as { stateFilePath?: string }).stateFilePath;
+    if (typeof candidate === 'string' && candidate.trim()) return candidate;
+  }
+  return DEFAULT_PANEL_STATE_PATH;
 }
 
-export function deletePanelMessage(guildId: string) {
+function readPanelState(filePath: string): Record<string, { channelId: string; messageId: string }> {
+  try {
+    const raw = readFileSync(filePath, 'utf8');
+    if (!raw.trim()) return {};
+    const parsed = JSON.parse(raw);
+    if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+      return parsed as Record<string, { channelId: string; messageId: string }>;
+    }
+    return {};
+  } catch {
+    return {};
+  }
+}
+
+function writePanelState(filePath: string, state: Record<string, { channelId: string; messageId: string }>): void {
+  try {
+    mkdirSync(dirname(filePath), { recursive: true });
+    writeFileSync(filePath, JSON.stringify(state, null, 2), 'utf8');
+  } catch {
+    // Ignora errores de E/S para no romper la reproducción.
+  }
+}
+
+export function setPanelMessage(guildId: string, message: Message, stateFilePath?: string | { stateFilePath?: string }) {
+  panelMessages.set(guildId, message);
+
+  const filePath = resolvePanelStatePath(stateFilePath);
+  const state = readPanelState(filePath);
+  state[guildId] = { channelId: message.channelId, messageId: message.id };
+  writePanelState(filePath, state);
+}
+
+export function deletePanelMessage(guildId: string, stateFilePath?: string | { stateFilePath?: string }) {
   panelMessages.delete(guildId);
   startedAtByGuild.delete(guildId);
   panelLocks.delete(guildId);
+
+  const filePath = resolvePanelStatePath(stateFilePath);
+  const state = readPanelState(filePath);
+  if (Object.prototype.hasOwnProperty.call(state, guildId)) {
+    delete state[guildId];
+    writePanelState(filePath, state);
+  }
+}
+
+/**
+ * Embed compartido del cierre «Cola finalizada», usado tanto en `updateEmptyPanel`
+ * como en la limpieza de paneles huérfanos al arrancar.
+ */
+export function buildClosedPanelEmbed(): EmbedBuilder {
+  return new EmbedBuilder()
+    .setColor(0x5865f2)
+    .setTitle('📭 Cola finalizada')
+    .setDescription(
+      'Me desconecté del canal de voz porque no quedan canciones en la cola.\n'
+      + 'Usa `/play` cuando quieras volver a escuchar música.',
+    )
+    .setFooter({ text: 'CubitoMusic' })
+    .setTimestamp();
 }
 
 function isHttpUrl(value: unknown): value is string {
@@ -272,15 +337,7 @@ export async function updateEmptyPanel(channel: any) {
 
     try {
       await existing.edit({
-        embeds: [new EmbedBuilder()
-          .setColor(0x5865f2)
-          .setTitle('📭 Cola finalizada')
-          .setDescription(
-            'Me desconecté del canal de voz porque no quedan canciones en la cola.\n'
-            + 'Usa `/play` cuando quieras volver a escuchar música.',
-          )
-          .setFooter({ text: 'CubitoMusic' })
-          .setTimestamp()],
+        embeds: [buildClosedPanelEmbed()],
         components: disabledRows,
       });
       // Panel deshabilitado en Discord: liberamos la referencia para no retener el Message en RAM
@@ -296,4 +353,41 @@ export async function updateEmptyPanel(channel: any) {
       });
     }
   });
+}
+
+
+export async function cleanupOrphanedPanels(client: Client, stateFilePath?: string | { stateFilePath?: string }): Promise<void> {
+  const filePath = resolvePanelStatePath(stateFilePath);
+  let state = readPanelState(filePath);
+
+  for (const [guildId, ref] of Object.entries(state)) {
+    try {
+      const channel = await client.channels.fetch(ref.channelId) as any;
+      if (channel && typeof channel.messages?.fetch === 'function') {
+        try {
+          const message = await channel.messages.fetch(ref.messageId);
+          if (message && message.editable) {
+            const disabledRows = (message.components ?? [])
+              .filter((row: any) => row?.type === ComponentType.ActionRow)
+              .map((row: any) =>
+                new ActionRowBuilder<ButtonBuilder>().addComponents(
+                  (row.components ?? []).map((component: any) => ButtonBuilder.from(component as any).setDisabled(true)),
+                ),
+              );
+            await message.edit({ embeds: [buildClosedPanelEmbed()], components: disabledRows });
+          }
+        } catch {
+          // Mensaje ya borrado (10008) u otro error: se ignora.
+        }
+      }
+    } catch {
+      // Canal ya borrado (10003) u otro error: se ignora.
+    }
+
+    delete state[guildId];
+    writePanelState(filePath, state);
+  }
+
+  // Garantiza que el archivo refleje el estado final (vacío si todo se procesó).
+  writePanelState(filePath, state);
 }

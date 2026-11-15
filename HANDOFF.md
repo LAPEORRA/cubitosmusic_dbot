@@ -1,16 +1,17 @@
 # Handoff — CubitoMusic
 
-> Documento de traspaso de sesión: estado del proyecto al **14-nov-2026** para retomar en una sesión fresca.
+> Documento de traspaso de sesión: estado del proyecto al **15-nov-2026** para retomar en una sesión fresca.
 
 ## Estado actual
 
 - **Carpeta activa:** `D:\cubitosmusic` (reubicado desde `D:\Proyectos_Opencode`).
-- **Git:** rama `main`, `HEAD` en `28469f0` (`feat(commands): confirmaciones públicas como mini-embeds y errores efímeros`), **sincronizado con `origin/main`** y con cambios locales sin commit del bloque 19 (apagado ordenado). Los bloques 17 y 18 ya están publicados (`79a386c`, `28469f0`).
+- **Git:** rama `main`, `HEAD` en `105f720` (`feat(shutdown): apagado ordenado ante Ctrl+C y cierre de consola`), **sincronizado con `origin/main`** y con cambios locales sin commit del bloque 2 (persistencia del panel). Los bloques 19 ya están publicados (`105f720`).
 - **Base previa:** `2291c3e` (`feat(panel): reemplaza la barra ASCII por duración y cuenta regresiva nativa`).
 - **Remoto:** `https://github.com/LAPEORRA/cubitosmusic_dbot.git` (`origin/main`).
 
 ### Últimos commits
 ```
+105f720 feat(shutdown): apagado ordenado ante Ctrl+C y cierre de consola
 28469f0 feat(commands): confirmaciones públicas como mini-embeds y errores efímeros
 79a386c feat(panel): rediseña el embed al estilo MatchBox y mejora el cierre de sesión
 2291c3e feat(panel): reemplaza la barra ASCII por duración y cuenta regresiva nativa
@@ -31,7 +32,7 @@ cd30a8c feat: comandos de gestión de cola clear, remove y skipto
 ## Verificación (todo en verde al cerrar)
 
 1. `npm run typecheck` → ✅ 0 errores (src + tests + scripts)
-2. `npm test` → ✅ **106/106 pass, 0 fail** (telemetría, panel, presencia, P0, `/help`, mini-embeds públicos y apagado ordenado)
+2. `npm test` → ✅ **109/109 pass, 0 fail** (telemetría, panel, presencia, P0, `/help`, mini-embeds públicos, apagado ordenado y persistencia del panel)
 3. `npm run build` → ✅ OK (tsc → `dist/`)
 
 > `deploy-commands` ejecutado: **12 comandos** registrados en el guild, incluido `/help`. Solo re-desplegar si cambia la definición (`data`) de algún comando.
@@ -177,6 +178,15 @@ cd30a8c feat: comandos de gestión de cola clear, remove y skipto
 - Tests (`tests/utils/shutdown.test.ts`): idempotencia con señales repetidas (limpieza una sola vez), limpieza de varias colas con panel, aislamiento de fallos por cola y salida forzada por timeout cuando `client.destroy()` queda colgado. Total **106/106**.
 - Docs sincronizadas: `AGENTS.md` (árbol + flujo) y `docs/ARCHITECTURE.md` (sección «Apagado ordenado»).
 - Verificación: `npm run typecheck` ✅, `npm test` ✅ **106/106**, `npm run build` ✅. Zonas congeladas intactas. Cambios locales sin commit.
+
+### 20. Persistencia del panel y limpieza de huérfanos (OpenCode, 15-nov-2026)
+- `src/player/panel/panel.ts`: persistencia ligera del `messageId` en `logs/panel-state.json` mediante `setPanelMessage`/`deletePanelMessage` (ruta inyectable para tests; E/S tolerante a fallos).
+- `buildClosedPanelEmbed()` extraído como helper compartido (usado por `updateEmptyPanel` y la limpieza).
+- `cleanupOrphanedPanels(client, stateFilePath?)` exportado: cierra paneles huérfanos de sesiones anteriores (edita con «📭 Cola finalizada», deshabilita botones) y limpia el JSON; ignora archivos inexistentes/vacíos/corruptos y errores de Discord (10003/10008).
+- `src/events/ready.ts`: llama a `void cleanupOrphanedPanels(client)` tras imprimir el banner.
+- Tests nuevos en `tests/player/panel.test.ts`: persistencia/borrado y limpieza de huérfanos (existente y ausente). Total **109/109**.
+- Docs sincronizadas: `AGENTS.md` y `docs/ARCHITECTURE.md`.
+- Verificación: `npm run typecheck` ✅, `npm test` ✅ **109/109**, `npm run build` ✅. Zonas congeladas intactas. Cambios locales sin commit.
 
 ## Pendientes / próximos pasos
 

@@ -10,8 +10,11 @@ import {
 } from 'discord.js';
 import type { GuildQueue, Track } from 'discord-player';
 import {
+  buildClosedPanelEmbed,
   buildPanelEmbed,
   buildPanelRows,
+  cleanupOrphanedPanels,
+  deletePanelMessage,
   formatPanelProgress,
   getPanelMessage,
   getPanelRowState,
@@ -19,6 +22,9 @@ import {
   updateEmptyPanel,
   updatePanel,
 } from '../../src/player/panel/panel.js';
+import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { handlePanelButton } from '../../src/player/panel/panel-buttons.js';
 
 function fakeQueue(volume = 70): GuildQueue {
@@ -461,3 +467,79 @@ test('panel_shuffle avisa cuando no hay canciones en espera y no re-renderiza', 
   assert.equal(sends, 0, 'no debe re-renderizar el panel');
 });
 
+
+
+
+test('setPanelMessage persiste channelId/messageId y deletePanelMessage lo elimina', () => {
+  const guildId = 'panel-persist-' + Date.now();
+  const dir = mkdtempSync(join(tmpdir(), 'panel-'));
+  const stateFile = join(dir, 'panel-state.json');
+  const message = { id: 'msg-123', channelId: 'chan-456', editable: true, components: [] } as unknown as Message;
+
+  setPanelMessage(guildId, message, stateFile);
+  const persisted = JSON.parse(readFileSync(stateFile, 'utf8'));
+  assert.deepEqual(persisted[guildId], { channelId: 'chan-456', messageId: 'msg-123' });
+
+  deletePanelMessage(guildId, stateFile);
+  const after = JSON.parse(readFileSync(stateFile, 'utf8'));
+  assert.equal(after[guildId], undefined);
+});
+
+test('cleanupOrphanedPanels edita el mensaje huerfano con Cola finalizada y limpia el JSON', async () => {
+  const guildId = 'panel-orphan-' + Date.now();
+  const dir = mkdtempSync(join(tmpdir(), 'panel-'));
+  const stateFile = join(dir, 'panel-state.json');
+
+  const apiRow = {
+    type: ComponentType.ActionRow,
+    components: [
+      { type: ComponentType.Button, custom_id: 'panel_pause', style: ButtonStyle.Secondary },
+    ],
+  };
+  let edited: any;
+  const message = {
+    id: 'msg-999',
+    channelId: 'chan-111',
+    editable: true,
+    components: [apiRow],
+    async edit(payload: any) { edited = payload; return message; },
+  };
+
+  const channel = {
+    messages: { fetch: async () => message },
+  };
+  const client = { channels: { fetch: async () => channel } } as any;
+
+  const state = { [guildId]: { channelId: 'chan-111', messageId: 'msg-999' } };
+  mkdirSync(dir, { recursive: true });
+  writeFileSync(stateFile, JSON.stringify(state));
+
+  await cleanupOrphanedPanels(client, stateFile);
+
+  assert.equal(edited.embeds[0].data.title, '📭 Cola finalizada');
+  const disabled = edited.components.flatMap((row: any) => row.components.map((c: any) => c.data.disabled));
+  assert.deepEqual(disabled, [true]);
+  const after = JSON.parse(readFileSync(stateFile, 'utf8'));
+  assert.equal(after[guildId], undefined);
+});
+
+test('cleanupOrphanedPanels limpia la entrada sin lanzar si el mensaje o canal no existen', async () => {
+  const guildId = 'panel-gone-' + Date.now();
+  const dir = mkdtempSync(join(tmpdir(), 'panel-'));
+  const stateFile = join(dir, 'panel-state.json');
+
+  const client = {
+    channels: {
+      fetch: async () => { throw new Error('Unknown Channel'); },
+    },
+  } as any;
+
+  const state = { [guildId]: { channelId: 'chan-gone', messageId: 'msg-gone' } };
+  mkdirSync(dir, { recursive: true });
+  writeFileSync(stateFile, JSON.stringify(state));
+
+  await assert.doesNotReject(async () => cleanupOrphanedPanels(client, stateFile));
+
+  const after = JSON.parse(readFileSync(stateFile, 'utf8'));
+  assert.equal(after[guildId], undefined);
+});
