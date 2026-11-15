@@ -5,13 +5,13 @@
 ## Estado actual
 
 - **Carpeta activa:** `D:\cubitosmusic` (reubicado desde `D:\Proyectos_Opencode`).
-- **Git:** rama `main`, `HEAD` en `27eec90` (`feat(panel): persiste messageId y cierra paneles huérfanos al arrancar`), **sincronizado con `origin/main`** y con cambios locales sin commit del bloque `/volume`. Los bloques 19 y 20 ya están publicados (`105f720`, `27eec90`).
+- **Git:** rama `main`, `HEAD` en `836bde4` (`feat(commands): añade /volume y refresca el panel activo`), **sincronizado con `origin/main`**, con un cambio local sin commit del bloque 22 (`/play`, solo presentación). Los bloques 19, 20 y 21 ya están publicados (`105f720`, `27eec90`, `836bde4`).
 - **Base previa:** `2291c3e` (`feat(panel): reemplaza la barra ASCII por duración y cuenta regresiva nativa`).
 - **Remoto:** `https://github.com/LAPEORRA/cubitosmusic_dbot.git` (`origin/main`).
 
 ### Últimos commits
 ```
-27eec90 feat(panel): persiste messageId y cierra paneles huérfanos al arrancar
+836bde4 feat(commands): añade /volume y refresca el panel activo
 105f720 feat(shutdown): apagado ordenado ante Ctrl+C y cierre de consola
 28469f0 feat(commands): confirmaciones públicas como mini-embeds y errores efímeros
 79a386c feat(panel): rediseña el embed al estilo MatchBox y mejora el cierre de sesión
@@ -197,10 +197,16 @@ cd30a8c feat: comandos de gestión de cola clear, remove y skipto
 - Docs sincronizadas: `AGENTS.md` y `docs/ARCHITECTURE.md`.
 - Verificación: `npm run typecheck` ✅, `npm test` ✅ **115/115**, `npm run build` ✅, `npm run deploy-commands` ✅ (13 comandos). Zonas congeladas intactas. Cambios locales sin commit.
 
+### 22. Cola reportada por `/play` = canciones en espera (OpenCode, 15-nov-2026)
+- `src/commands/music/play.ts` (**solo presentación del mini-embed**, final del handler): tras refrescar `track.requestedBy`, consulta la cola resultante con `const activeQueue = useQueue(interaction.guildId);` y calcula las pistas pendientes excluyendo la que ya suena: `const waitingCount = activeQueue?.tracks.size ?? Math.max(0, (result.searchResult?.tracks.length ?? 1) - 1);`.
+- Etiqueta con concordancia singular/plural: `const queueLabel = \`${waitingCount} ${waitingCount === 1 ? 'canción' : 'canciones'}\`;` y nueva `description` `` `${addedLabel} • Cola: ${queueLabel} • Pedida por <@id>` ``. Se elimina la antigua `queueSize` (que usaba `existingQueue` y podía contar la pista en curso).
+- Zonas congeladas respetadas: no se tocaron `normalizeUrl`, `searchEngine`, `canPlayInChannel`, `signal`, `volume: 70`, `nodeOptions` ni la llamada a `player.play()`; `youtubeDlpMix.ts` y el registro de extractores intactos. Sin cambios en `data`, así que **no hace falta** `deploy-commands`.
+- Verificación: `npm run typecheck` ✅, `npm test` ✅ **115/115**, `npm run build` ✅. Cambios locales sin commit.
+
 ## Pendientes / próximos pasos
 
 1. **QA visual real** de la TUI en PowerShell con el bot vivo (`npm run dev`). Preview estático ya validado con `tsx`.
-2. **QA manual en Discord:** banner/logs, trazas `CMD`/`BOTÓN`, botones 🔁/🔀, `/clear`, `/remove`, `/skipto`, `/help`, pausa durante buffering, autodesconexión a los 5 min y ausencia de warnings `ephemeral`. Validar los mini-embeds públicos de confirmación (visibles para el canal) frente a los rechazos efímeros, además del panel MatchBox (GIF del autor al reproducir y su ausencia en pausa, mención del solicitante, footer de estado, etiquetas de botones y cuenta regresiva `<t:…:R>` al pausar/reanudar) y el cierre «📭 Cola finalizada». Opcional: fijar un disco/vinilo girando con `PANEL_DISC_GIF_URL`.
+2. **QA manual en Discord:** banner/logs, trazas `CMD`/`BOTÓN`, botones 🔁/🔀, `/clear`, `/remove`, `/skipto`, `/help`, pausa durante buffering, autodesconexión a los 5 min y ausencia de warnings `ephemeral`. Validar los mini-embeds públicos de confirmación (visibles para el canal) —en especial que `/play` informe las canciones **en espera** (`0/1 canción`, `N canciones`) y no cuente la pista en curso— frente a los rechazos efímeros, además del panel MatchBox (GIF del autor al reproducir y su ausencia en pausa, mención del solicitante, footer de estado, etiquetas de botones y cuenta regresiva `<t:…:R>` al pausar/reanudar) y el cierre «📭 Cola finalizada». Opcional: fijar un disco/vinilo girando con `PANEL_DISC_GIF_URL`.
 3. **QA de apagado:** con el bot reproduciendo, probar `Ctrl + C` (SIGINT), cerrar la ventana de consola en Windows (SIGBREAK) y `SIGTERM` en Docker: debe registrar `STOP`, detener la música, dejar el panel en «📭 Cola finalizada» y salir en menos de ~3 s.
 4. **Arquitectura pendiente:** panel dinámico con throttle/coalescing, TUI avanzada (`log-update`/chalk), web dashboard.
 

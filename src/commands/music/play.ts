@@ -129,7 +129,10 @@ export async function play(interaction: any, player: Player) {
     }
 
     const playlist = result.searchResult?.playlist;
-    const queueSize = existingQueue?.tracks.size ?? result.searchResult?.tracks.length ?? 1;
+    const activeQueue = useQueue(interaction.guildId);
+    // Cola en espera: excluye la pista que ya está sonando (mismo criterio que el footer del panel)
+    const waitingCount = activeQueue?.tracks.size ?? Math.max(0, (result.searchResult?.tracks.length ?? 1) - 1);
+    const queueLabel = `${waitingCount} ${waitingCount === 1 ? 'canción' : 'canciones'}`;
     const addedLabel = playlist
       ? `${result.searchResult?.tracks.length ?? 1} canciones`
       : result.track.duration || '—';
@@ -140,7 +143,7 @@ export async function play(interaction: any, player: Player) {
         title: playlist ? playlist.title : result.track.title,
         url: playlist ? playlist.url : result.track.url,
         thumbnail: playlist ? playlist.thumbnail : result.track.thumbnail,
-        description: `${addedLabel} • Cola: ${queueSize} canciones • Pedida por <@${interaction.user.id}>`,
+        description: `${addedLabel} • Cola: ${queueLabel} • Pedida por <@${interaction.user.id}>`,
       })],
     });
   } catch (error: any) {
