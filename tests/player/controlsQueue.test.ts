@@ -1,7 +1,18 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import type { GuildQueue } from 'discord-player';
-import { backTrack, clearQueue, removeTrack, skipTo, skipTrack, stopQueue } from '../../src/player/controls.js';
+import {
+  applyInitialVolume,
+  backTrack,
+  clearQueue,
+  getDesiredVolume,
+  reapplyVolumeWhenPlaying,
+  removeTrack,
+  setQueueVolume,
+  skipTo,
+  skipTrack,
+  stopQueue,
+} from '../../src/player/controls.js';
 
 interface FakeTrack {
   id: string;
@@ -188,4 +199,152 @@ test('stopQueue elimina la cola aunque no haya conexión activa', async () => {
   (queue as unknown as { connection: unknown }).connection = null;
   await stopQueue(queue);
   assert.deepEqual(events, ['clear', 'delete']);
+});
+
+interface FakeVolumeQueueOptions {
+  reportedVolume?: number;
+  withDispatcher?: boolean;
+  nodeIgnoresVolume?: boolean;
+  audioPlayer?: FakeAudioPlayer;
+}
+
+interface FakeAudioPlayer {
+  state: { status: string };
+  on: (event: string, listener: (...args: any[]) => void) => void;
+  off: (event: string, listener: (...args: any[]) => void) => void;
+  emit: (event: string, ...args: any[]) => void;
+  listenerCount: () => number;
+}
+
+function fakeAudioPlayer(status = 'buffering'): FakeAudioPlayer {
+  const listeners = new Map<string, Set<(...args: any[]) => void>>();
+  return {
+    state: { status },
+    on(event, listener) {
+      const set = listeners.get(event) ?? new Set();
+      set.add(listener);
+      listeners.set(event, set);
+    },
+    off(event, listener) {
+      listeners.get(event)?.delete(listener);
+    },
+    emit(event, ...args) {
+      for (const listener of [...(listeners.get(event) ?? [])]) listener(...args);
+    },
+    listenerCount: () => listeners.get('stateChange')?.size ?? 0,
+  };
+}
+
+/**
+ * Cola que reproduce el comportamiento real de discord-player:
+ * `node.setVolume` delega en `dispatcher.dsp.volume` (el transformer), pero sale
+ * en silencio cuando el dispatcher no existe.
+ */
+function fakeVolumeQueue(options: FakeVolumeQueueOptions = {}) {
+  const nodeVolumeCalls: number[] = [];
+  const transformerCalls: number[] = [];
+  let reported = options.reportedVolume ?? 100;
+
+  const transformer = {
+    get volume() {
+      return reported;
+    },
+    setVolume(value: number) {
+      transformerCalls.push(value);
+      reported = value;
+      return true;
+    },
+  };
+
+  const node = {
+    get volume() {
+      return reported;
+    },
+    setVolume(value: number) {
+      nodeVolumeCalls.push(value);
+      if (!options.withDispatcher || options.nodeIgnoresVolume) return false;
+      transformer.setVolume(value);
+      return true;
+    },
+  };
+
+  const queue = {
+    node,
+    guild: { id: 'guild-1' },
+    dispatcher: options.withDispatcher === false
+      ? null
+      : { dsp: { volume: transformer }, audioPlayer: options.audioPlayer },
+  } as unknown as GuildQueue;
+
+  return { queue, nodeVolumeCalls, transformerCalls, transformer };
+}
+
+test('applyInitialVolume aplica la ganancia real aunque queue.node.volume ya reporte 70', () => {
+  const { queue, nodeVolumeCalls, transformerCalls } = fakeVolumeQueue({ reportedVolume: 70 });
+
+  assert.equal(applyInitialVolume(queue, 70), 70);
+  assert.deepEqual(nodeVolumeCalls, [70], 'debe fijar el volumen del nodo');
+  assert.deepEqual(transformerCalls, [70], 'debe escribir en el VolumeTransformer activo');
+});
+
+test('applyInitialVolume escribe en el transformer aunque el nodo ignored el volumen', () => {
+  const { queue, transformerCalls } = fakeVolumeQueue({ nodeIgnoresVolume: true });
+
+  assert.equal(applyInitialVolume(queue, 70), 70);
+  assert.deepEqual(transformerCalls, [70], 'la ganancia real no depende del nodo');
+});
+
+test('applyInitialVolume sin dispatcher no lanza y recuerda el volumen deseado', () => {
+  const { queue, nodeVolumeCalls, transformerCalls } = fakeVolumeQueue({ withDispatcher: false });
+
+  assert.equal(applyInitialVolume(queue, 55), 55);
+  assert.deepEqual(nodeVolumeCalls, [55]);
+  assert.deepEqual(transformerCalls, []);
+  assert.equal(getDesiredVolume(queue), 55);
+  assert.equal(getDesiredVolume(queue, 70), 55);
+});
+
+test('applyInitialVolume clampa valores fuera de rango y sin número', () => {
+  const { queue, transformerCalls } = fakeVolumeQueue();
+
+  assert.equal(applyInitialVolume(queue, 140), 100);
+  assert.equal(applyInitialVolume(queue, -5), 0);
+  assert.equal(applyInitialVolume(queue, Number.NaN), 70);
+  assert.deepEqual(transformerCalls, [100, 0, 70]);
+});
+
+test('setQueueVolume recuerda el volumen elegido para las siguientes pistas', () => {
+  const { queue, transformerCalls } = fakeVolumeQueue({ reportedVolume: 70 });
+
+  assert.equal(setQueueVolume(queue, 45), 45);
+  assert.equal(getDesiredVolume(queue), 45);
+  assert.deepEqual(transformerCalls, [45]);
+  assert.equal(setQueueVolume(queue, 0), null);
+  assert.equal(getDesiredVolume(queue), 45, 'un valor inválido no altera el volumen deseado');
+});
+
+test('reapplyVolumeWhenPlaying reaplica el volumen al entrar en playing y no duplica listeners', () => {
+  const audioPlayer = fakeAudioPlayer('buffering');
+  const { queue, transformerCalls } = fakeVolumeQueue({ reportedVolume: 100, audioPlayer });
+
+  reapplyVolumeWhenPlaying(queue, 70);
+  reapplyVolumeWhenPlaying(queue, 70);
+  assert.equal(audioPlayer.listenerCount(), 1, 'solo un listener pendiente por AudioPlayer');
+  assert.deepEqual(transformerCalls, [], 'no aplica hasta reproducir');
+
+  audioPlayer.emit('stateChange', { status: 'buffering' }, { status: 'playing' });
+  assert.deepEqual(transformerCalls, [70]);
+  assert.equal(audioPlayer.listenerCount(), 0, 'el listener se retira tras aplicarse');
+
+  audioPlayer.emit('stateChange', { status: 'playing' }, { status: 'idle' });
+  assert.deepEqual(transformerCalls, [70], 'no reaplica en transiciones que no son playing');
+});
+
+test('reapplyVolumeWhenPlaying no registra listeners si ya está reproduciendo', () => {
+  const audioPlayer = fakeAudioPlayer('playing');
+  const { queue } = fakeVolumeQueue({ audioPlayer });
+
+  reapplyVolumeWhenPlaying(queue, 70);
+  assert.equal(audioPlayer.listenerCount(), 0);
+  assert.equal(getDesiredVolume(queue), 70);
 });

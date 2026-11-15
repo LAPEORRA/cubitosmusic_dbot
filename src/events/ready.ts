@@ -3,6 +3,7 @@ import { ActivityType, Client } from 'discord.js';
 import type { GuildQueue, Player, Track } from 'discord-player';
 import { buildPanelEmbed, buildPanelRows, getPanelRowState, updatePanel, setStartedAt, getStartedAt, updateEmptyPanel, cleanupOrphanedPanels } from '../player/panel/panel.js';
 import { enableAudioPreset } from '../player/audioPreset.js';
+import { applyInitialVolume, getDesiredVolume, reapplyVolumeWhenPlaying } from '../player/controls.js';
 import {
   getSystemMetrics,
   logRow,
@@ -272,9 +273,15 @@ export const ready = async (client: Client, player: Player, guildId: string, spo
 
   player.events.on('queueCreate', (queue) => {
     const sessionId = getPlaybackSessionId(queue);
-    const presetActive = enableAudioPreset(queue);
+    // `queueCreate` ocurre antes de crear el `AudioResource`: aquí no hay dispatcher,
+    // así que el compresor se aplica de verdad en `playerStart`. El log refleja la
+    // intención configurada en `nodeOptions.disableCompressor` de `/play`.
+    enableAudioPreset(queue);
+    const presetActive = queue.options?.disableCompressor === false;
     // El preset DSP puede reiniciar el nodo a 100% al cambiar de pista; fijamos la base.
-    if (typeof queue.node?.setVolume === 'function') queue.node.setVolume(70);
+    // Aquí el dispatcher aún no existe, así que `setVolume` es un no-op silencioso:
+    // registra el volumen deseado y se aplicará de verdad en `playerStart`.
+    applyInitialVolume(queue, 70);
     logPlaybackEvent('queue_created', queue, { sessionId, presetActive }, client);
 
     traceQueueStateChanges(queue);
@@ -321,6 +328,17 @@ export const ready = async (client: Client, player: Player, guildId: string, spo
     }, client);
 
     client.user?.setActivity(track.title, { type: ActivityType.Listening });
+
+    // El dispatcher (y su `FiltersChain`) ya existe: reafirmamos el compresor PCM
+    // tras crear el `AudioResource` y la ganancia real del stream, para que el
+    // primer segundo suene igual que lo que muestra el panel.
+    if (queue.dispatcher) {
+      void enableAudioPreset(queue);
+      const targetVolume = getDesiredVolume(queue, queue.node?.volume || 70);
+      applyInitialVolume(queue, targetVolume);
+      // Red de seguridad si el resource se adjunta después de `playerStart`.
+      reapplyVolumeWhenPlaying(queue, targetVolume);
+    }
 
     const channel = (queue.metadata as any)?.channel as any;
     if (!channel) return;

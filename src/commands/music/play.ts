@@ -99,6 +99,7 @@ export async function play(interaction: any, player: Player) {
           leaveOnStop: false,     // No desconectar al usar /stop (lo gestiona el comando)
           verifyFallbackStream: true,
           volume: 70, // Reducir volumen base para evitar saturación
+          disableCompressor: false, // Habilita el compresor PCM nativo (preset en audioPreset.ts)
         },
       });
     } finally {
