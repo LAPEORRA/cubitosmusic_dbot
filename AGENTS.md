@@ -84,7 +84,8 @@ src/
     └── commands.ts           — Contrato Command / CommandContext / CommandCategory
 ├── utils/
 │   ├── commandEmbed.ts      — Mini-embed público de confirmaciones (color de marca, URLs validadas)
-│   └── logger.ts            — Consola TUI: ANSI, banner, tabla de logs, métricas y logs a archivo
+│   ├── logger.ts            — Consola TUI: ANSI, banner, tabla de logs, métricas y logs a archivo
+│   └── shutdown.ts          — Apagado ordenado (señales, stop de colas, panel y cierre del cliente)
 tests/                        — Pruebas (commands, events, player, utils) con node:test
 scripts/deploy-commands.ts    — Registro de comandos vía REST (usa el registro del router)
 ```
@@ -101,6 +102,7 @@ scripts/deploy-commands.ts    — Registro de comandos vía REST (usa el registr
 - **`/play`**: `normalizeUrl` (en `src/player/url.ts`) → elige `searchEngine` por dominio (youtube.com → ytdlp, spotify.com → spotify, soundcloud.com → soundcloud, resto auto) → `player.play(channel, query, { requestedBy, signal: AbortSignal.timeout(30_000), searchEngine, nodeOptions })`. `nodeOptions`: `metadata {channel}`, `leaveOnEmpty/leaveOnEnd: true` con `*Cooldown: 300_000` (auto-desconexión tras 5 min), `leaveOnStop: false`, `verifyFallbackStream: true`, `volume: 70` (única anti-saturación). `requestedBy` va a nivel de pista, no en `metadata`.
 - **Panel**: los eventos de `playerStart`/pause/resume en `ready.ts` re-renderizan el embed en el canal de `queue.metadata.channel`. El embed es compacto: `author` «Reproduciendo» + `PANEL_DISC_GIF_URL` (o «En pausa» sin icono), `description` de 2 líneas con `formatPanelProgress()` (duración + `<t:UNIX:R>` al reproducir, timecodes congelados en pausa; `/nowplaying` conserva la barra ASCII) + mención del solicitante + autor, y `footer` de estado (`Vol`, `Cola`, `Loop`) con `setTimestamp()`. Botones con etiqueta corta mantienen el prefijo `panel_*` y el `state` de `PanelRowState`. Estado por guild en Maps de `panel.ts` (`panelMessages`, `startedAtByGuild`, `panelLocks` — serializa ediciones). Si el mensaje ya no es editable, `updatePanel` lo borra y crea uno nuevo. `emptyQueue`/`queueDelete`/stop → `updateEmptyPanel` (cierre «📭 Cola finalizada» + botones deshabilitados) y `deletePanelMessage` libera los tres Maps para que no crezcan indefinidamente.
 - **Botones**: contrato de ruteo = customIds `panel_back`, `panel_pause`, `panel_skip`, `panel_stop`, `panel_queue`, `panel_loop`, `panel_shuffle`. Nuevos botones deben seguir ese prefijo `panel_`.
+- **Apagado ordenado**: `src/utils/shutdown.ts` (`registerGracefulShutdown`, conectado en `index.ts` tras `client.login`) escucha `SIGINT`/`SIGTERM`/`SIGHUP`/`SIGBREAK` y, sin TTY, `stdin` `end`/`close`. Es idempotente: registra `STOP` en la TUI, arma un timeout de seguridad (3 s), detiene cada cola con `stopQueue` + `updateEmptyPanel`, limpia la presencia, `client.destroy()` y `exit(0)`.
 
 ## Gotchas críticos (reproducción — leer antes de tocar nada)
 1. **NO `queue.filters.ffmpeg.setFilters(...)`**: el stream de YouTubeDlpExtractor viene en `$fmt: 'raw'` (PCM) y el FFmpegFilterer lanza su propio ffmpeg que muere → `write EPIPE` → la pista se corta ~2s y se vacía la cola. `setFilters` además dispara `triggerReplay()` (re-elige la pista), así que no se llama ni desde `playerStart`.

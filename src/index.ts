@@ -6,6 +6,7 @@ import { YouTubeDlpMixExtractor } from './player/extractors/youtubeDlpMix.js';
 import { ready } from './events/ready.js';
 import { interactionCreate } from './events/interactionCreate.js';
 import { loadConfigOrExit } from './config.js';
+import { registerGracefulShutdown } from './utils/shutdown.js';
 
 const config = loadConfigOrExit();
 
@@ -45,3 +46,7 @@ client.on(Events.InteractionCreate, (interaction) => interactionCreate(interacti
 client.login(config.discordToken).catch((err) => {
   console.error('❌ Error login:', err);
 });
+
+// Apagado ordenado: Ctrl + C / cierre de consola detienen música, deshabilitan
+// el panel y cierran la conexión antes de salir.
+registerGracefulShutdown(client, player);

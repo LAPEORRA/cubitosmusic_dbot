@@ -318,6 +318,19 @@ las canciones.
 
 ---
 
+## Apagado ordenado (`src/utils/shutdown.ts`)
+
+- `registerGracefulShutdown(client, player)` se llama en `src/index.ts` tras `client.login(...)`.
+- Escucha `SIGINT`, `SIGTERM`, `SIGHUP` y `SIGBREAK`; con `!process.stdin.isTTY` también `stdin` `end`/`close`.
+- `createShutdownHandler({ client, player, exit?, timeoutMs? })` es idempotente (bandera `shuttingDown`):
+  1. Log `STOP` «Apagando bot (señal)...» en la TUI.
+  2. `setTimeout(() => exit(0), timeoutMs)` con `unref()` (3 s por defecto) como red de seguridad.
+  3. Por cada cola de `player.queues.cache`: `stopQueue(queue)` + `updateEmptyPanel(channel)`.
+  4. `client.user?.setActivity()`, `await client.destroy()` y `exit(0)`.
+- Si una cola falla, se registra el error y se continúa con las demás.
+
+---
+
 ## Manejo de errores y directrices de respuestas
 
 - Las **confirmaciones exitosas** de comandos son mini-embeds públicos (`buildCommandEmbed`, color `0x5865f2`).

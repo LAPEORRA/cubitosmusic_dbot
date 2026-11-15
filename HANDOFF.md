@@ -5,12 +5,14 @@
 ## Estado actual
 
 - **Carpeta activa:** `D:\cubitosmusic` (reubicado desde `D:\Proyectos_Opencode`).
-- **Git:** rama `main`, `HEAD` en `2291c3e` (`feat(panel): reemplaza la barra ASCII por duración y cuenta regresiva nativa`), **sincronizado con `origin/main`** y con cambios locales sin commit de los bloques 17–18 (panel MatchBox y mini-embeds públicos en comandos). Incluye los bloques 12–16: panel reactivo y presencia, P0 de stop/panel/preset, `/pause` + `/help`, vaciado de cola en `stopQueue` y cuenta regresiva nativa.
-- **Base previa:** `4844cc3` (`fix(player): vacía la cola antes de desconectar en /stop`).
+- **Git:** rama `main`, `HEAD` en `28469f0` (`feat(commands): confirmaciones públicas como mini-embeds y errores efímeros`), **sincronizado con `origin/main`** y con cambios locales sin commit del bloque 19 (apagado ordenado). Los bloques 17 y 18 ya están publicados (`79a386c`, `28469f0`).
+- **Base previa:** `2291c3e` (`feat(panel): reemplaza la barra ASCII por duración y cuenta regresiva nativa`).
 - **Remoto:** `https://github.com/LAPEORRA/cubitosmusic_dbot.git` (`origin/main`).
 
 ### Últimos commits
 ```
+28469f0 feat(commands): confirmaciones públicas como mini-embeds y errores efímeros
+79a386c feat(panel): rediseña el embed al estilo MatchBox y mejora el cierre de sesión
 2291c3e feat(panel): reemplaza la barra ASCII por duración y cuenta regresiva nativa
 4844cc3 fix(player): vacía la cola antes de desconectar en /stop
 158d410 feat(commands): añade /help dinámico y unifica la validación de /pause
@@ -29,7 +31,7 @@ cd30a8c feat: comandos de gestión de cola clear, remove y skipto
 ## Verificación (todo en verde al cerrar)
 
 1. `npm run typecheck` → ✅ 0 errores (src + tests + scripts)
-2. `npm test` → ✅ **102/102 pass, 0 fail** (telemetría, panel reactivo, presencia, P0 cerrados, `/help`, cuenta regresiva, rediseño MatchBox y mini-embeds públicos)
+2. `npm test` → ✅ **106/106 pass, 0 fail** (telemetría, panel, presencia, P0, `/help`, mini-embeds públicos y apagado ordenado)
 3. `npm run build` → ✅ OK (tsc → `dist/`)
 
 > `deploy-commands` ejecutado: **12 comandos** registrados en el guild, incluido `/help`. Solo re-desplegar si cambia la definición (`data`) de algún comando.
@@ -166,11 +168,22 @@ cd30a8c feat: comandos de gestión de cola clear, remove y skipto
 - Convenciones sincronizadas en `AGENTS.md`, `docs/ARCHITECTURE.md`, `README.md`, `CONTRIBUTING.md` y `.github/PULL_REQUEST_TEMPLATE.md` (confirmaciones públicas, errores ephemeral).
 - Verificación: `npm run typecheck` ✅, `npm test` ✅ **102/102**, `npm run build` ✅. Zonas congeladas respetadas (`play.ts` solo cambió la presentación; `youtubeDlpMix.ts` y registro de extractores intactos). Cambios locales sin commit.
 
+### 19. Apagado ordenado (OpenCode, 14-nov-2026)
+- Nuevo `src/utils/shutdown.ts`:
+  - `createShutdownHandler({ client, player, exit?, timeoutMs? })` devuelve un handler **idempotente** (bandera `shuttingDown`): log `STOP` amarillo «Apagando bot (señal)...», timeout de seguridad de 3 s (`setTimeout(...).unref()`) que fuerza `exit(0)` si Discord no responde, recorrido de `player.queues.cache.values()` con `stopQueue(queue)` + `updateEmptyPanel(channel)`, limpieza de presencia (`client.user?.setActivity()`), `await client.destroy()` y `exit(0)`.
+  - Errores por cola aislados (se registran y se continúa); `finally` limpia el temporizador y sale.
+  - `registerGracefulShutdown(client, player)`: `SIGINT`, `SIGTERM`, `SIGHUP`, `SIGBREAK` y, con `!process.stdin.isTTY`, `stdin` `end`/`close`.
+- `src/index.ts`: importa y conecta `registerGracefulShutdown(client, player)` tras `client.login(...)`. Registro/orden de extractores y eventos intactos.
+- Tests (`tests/utils/shutdown.test.ts`): idempotencia con señales repetidas (limpieza una sola vez), limpieza de varias colas con panel, aislamiento de fallos por cola y salida forzada por timeout cuando `client.destroy()` queda colgado. Total **106/106**.
+- Docs sincronizadas: `AGENTS.md` (árbol + flujo) y `docs/ARCHITECTURE.md` (sección «Apagado ordenado»).
+- Verificación: `npm run typecheck` ✅, `npm test` ✅ **106/106**, `npm run build` ✅. Zonas congeladas intactas. Cambios locales sin commit.
+
 ## Pendientes / próximos pasos
 
 1. **QA visual real** de la TUI en PowerShell con el bot vivo (`npm run dev`). Preview estático ya validado con `tsx`.
 2. **QA manual en Discord:** banner/logs, trazas `CMD`/`BOTÓN`, botones 🔁/🔀, `/clear`, `/remove`, `/skipto`, `/help`, pausa durante buffering, autodesconexión a los 5 min y ausencia de warnings `ephemeral`. Validar los mini-embeds públicos de confirmación (visibles para el canal) frente a los rechazos efímeros, además del panel MatchBox (GIF del autor al reproducir y su ausencia en pausa, mención del solicitante, footer de estado, etiquetas de botones y cuenta regresiva `<t:…:R>` al pausar/reanudar) y el cierre «📭 Cola finalizada». Opcional: fijar un disco/vinilo girando con `PANEL_DISC_GIF_URL`.
-3. **Arquitectura pendiente:** panel dinámico con throttle/coalescing, TUI avanzada (`log-update`/chalk), web dashboard.
+3. **QA de apagado:** con el bot reproduciendo, probar `Ctrl + C` (SIGINT), cerrar la ventana de consola en Windows (SIGBREAK) y `SIGTERM` en Docker: debe registrar `STOP`, detener la música, dejar el panel en «📭 Cola finalizada» y salir en menos de ~3 s.
+4. **Arquitectura pendiente:** panel dinámico con throttle/coalescing, TUI avanzada (`log-update`/chalk), web dashboard.
 
 ## Archivos clave
 
