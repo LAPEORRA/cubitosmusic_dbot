@@ -18,7 +18,7 @@ import {
   updatePanel,
   updateEmptyPanel,
 } from './panel.js';
-import { buildQueueReply } from '../queueSummary.js';
+import { buildQueueEmbed } from '../queueSummary.js';
 import { logRow, traceEvent } from '../../utils/logger.js';
 
 export async function handlePanelButton(
@@ -101,7 +101,8 @@ export async function handlePanelButton(
     }
     case 'panel_queue': {
       return interaction.followUp({
-        ...buildQueueReply(queue.currentTrack, queue.tracks.data),
+        embeds: [buildQueueEmbed(queue.currentTrack, queue.tracks.data)],
+        allowedMentions: { parse: [] },
         flags: 64,
       });
     }

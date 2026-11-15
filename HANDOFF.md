@@ -5,12 +5,13 @@
 ## Estado actual
 
 - **Carpeta activa:** `D:\cubitosmusic` (reubicado desde `D:\Proyectos_Opencode`).
-- **Git:** rama `main`, `HEAD` en `836bde4` (`feat(commands): añade /volume y refresca el panel activo`), **sincronizado con `origin/main`**, con un cambio local sin commit del bloque 22 (`/play`, solo presentación). Los bloques 19, 20 y 21 ya están publicados (`105f720`, `27eec90`, `836bde4`).
+- **Git:** rama `main`, `HEAD` en `30d06b1` (`fix(play): cuenta solo canciones en espera en la confirmación de /play`), **sincronizado con `origin/main`**, con cambios locales sin commit de los bloques 23 (compresor PCM nativo), 24 (ganancia real al iniciar pista + calibración del compresor), 25 (perfil DSP anti-pumping + reverb seca) y 26 (embed unificado de cola). Los bloques 19–22 ya están publicados (`105f720`, `27eec90`, `836bde4`, `30d06b1`).
 - **Base previa:** `2291c3e` (`feat(panel): reemplaza la barra ASCII por duración y cuenta regresiva nativa`).
 - **Remoto:** `https://github.com/LAPEORRA/cubitosmusic_dbot.git` (`origin/main`).
 
 ### Últimos commits
 ```
+30d06b1 fix(play): cuenta solo canciones en espera en la confirmación de /play
 836bde4 feat(commands): añade /volume y refresca el panel activo
 105f720 feat(shutdown): apagado ordenado ante Ctrl+C y cierre de consola
 28469f0 feat(commands): confirmaciones públicas como mini-embeds y errores efímeros
@@ -33,7 +34,7 @@ cd30a8c feat: comandos de gestión de cola clear, remove y skipto
 ## Verificación (todo en verde al cerrar)
 
 1. `npm run typecheck` → ✅ 0 errores (src + tests + scripts)
-2. `npm test` → ✅ **115/115 pass, 0 fail** (telemetría, panel, presencia, P0, `/help`, mini-embeds públicos, apagado ordenado, persistencia del panel y `/volume`)
+2. `npm test` → ✅ **133/133 pass, 0 fail** (telemetría, panel, presencia, P0, `/help`, mini-embeds públicos, apagado ordenado, persistencia del panel, `/volume`, compresor PCM nativo calibrado, reverb seca, ganancia real del stream y embed unificado de cola)
 3. `npm run build` → ✅ OK (tsc → `dist/`)
 
 > `deploy-commands` ejecutado: **13 comandos** registrados en el guild, incluidos `/help` y `/volume`. Solo re-desplegar si cambia la definición (`data`) de algún comando.
@@ -203,12 +204,64 @@ cd30a8c feat: comandos de gestión de cola clear, remove y skipto
 - Zonas congeladas respetadas: no se tocaron `normalizeUrl`, `searchEngine`, `canPlayInChannel`, `signal`, `volume: 70`, `nodeOptions` ni la llamada a `player.play()`; `youtubeDlpMix.ts` y el registro de extractores intactos. Sin cambios en `data`, así que **no hace falta** `deploy-commands`.
 - Verificación: `npm run typecheck` ✅, `npm test` ✅ **115/115**, `npm run build` ✅. Cambios locales sin commit.
 
+### 23. Compresor PCM nativo por la vía pública (OpenCode, 15-nov-2026)
+- **Autorización explícita del Product Owner** para tocar `nodeOptions` en `play.ts` solo con `disableCompressor: false`; el resto de la reproducción sigue congelada (`normalizeUrl`, `searchEngine`, `canPlayInChannel`, `signal`, `volume: 70`, `youtubeDlpMix.ts`, registro de extractores y la prohibición de `ffmpeg.setFilters`).
+- **Tipos reales verificados en `node_modules`** (discord-player `7.2.0` + `@discord-player/equalizer` `7.2.0`):
+  - `GuildNodeCreateOptions.disableCompressor?: boolean`, con default efectivo **`true`** (`options.disableCompressor ?? (options.disableCompressor = true)`); sin `false`, el dispatcher no crea el `CompressorTransformer`.
+  - `queue.filters` es `GuildQueueAudioFilters`; `get compressor()` → `queue.dispatcher?.compressor || null` (`CompressorTransformer | null`). **No** es un sub-objeto con `setCompressor` propio.
+  - `queue.filters.compressor.setCompressor(options: Partial<CompressorParameters>): CompressorParameters` → **síncrono** (el prompt admitía asíncrono; se respetó la firma real). `enableAudioPreset` declara `boolean`.
+  - El transformador se crea en el `FiltersChain` del dispatcher y sus `set*` disparan `onUpdate` → el dispatcher emite `compressor` → `GuildQueue` sincroniza `_lastFiltersCache.compressor` (las pistas siguientes heredan el preset sin tocar propiedades privadas).
+- `src/player/audioPreset.ts`: `enableAudioPreset(queue)` aplica `COMPRESSOR_PRESET` (`threshold: -14`, `ratio: 3`, `attack: 20`, `release: 150`, `makeupGain: 0`, `kneeWidth: 8`) con `queue.filters.compressor.setCompressor(...)`, devuelve `true` si se aplicó y `false` sin lanzar si no hay cola/dispatcher/API o si falla (log `PRESET` amarillo con `logRow`). Sigue sin usar `ffmpeg.setFilters` ni `_lastFiltersCache`.
+- `src/commands/music/play.ts`: **única** línea añadida en `nodeOptions` → `disableCompressor: false`. Sin cambios de presentación ni de `player.play()`.
+- `src/events/ready.ts`: `queueCreate` conserva `enableAudioPreset(queue)` + `queue.node.setVolume(70)` y ahora loguea `Preset: activo` según `queue.options.disableCompressor` (en ese punto aún no hay dispatcher, así que el getter `compressor` es `null`). `playerStart`, con `queue.dispatcher` activo: reafirma `enableAudioPreset(queue)` y `queue.node.setVolume(queue.node.volume || 70)`.
+- Tests `tests/player/audioPreset.test.ts`: preset exacto pasado a `setCompressor` (una sola llamada), sin `setFilters` ni escritura en `_lastFiltersCache`, `false` para cola/nodo/dispatcher/API ausentes y `false` sin lanzar cuando `setCompressor` falla. Total **117/117**.
+- Docs sincronizadas: `AGENTS.md` (zona congelada, árbol, flujo `/play`, nuevo gotcha 6) y `docs/ARCHITECTURE.md` (tabla, árbol y sección «Compresor PCM nativo»).
+- Verificación: `npm run typecheck` ✅, `npm test` ✅ **117/117**, `npm run build` ✅. Cambios locales sin commit.
+
+### 24. Ganancia real desde el primer segundo + compresor recalibrado (OpenCode, 15-nov-2026)
+- **Síntoma del Product Owner:** `/play` → el panel marca `Vol 70%` pero el audio sale a tope; solo al ejecutar `/volume 70` baja el volumen real.
+- **Causa raíz (inspección de `node_modules` + sondas ejecutadas contra el `dist` real):**
+  - `queue.dispatcher.volume` es un **getter numérico**; el objeto con `setVolume` vive en `queue.dispatcher.dsp.volume` (`VolumeTransformer`).
+  - `GuildQueuePlayerNode.setVolume` → `if (!this.queue.dispatcher) return false;` y `StreamDispatcher.setVolume` → `if (!this.dsp.volume) return false;`. **Sonda:** con `dispatcher: null`, `queue.node.setVolume(70)` devuelve `false` y no toca nada. Es exactamente lo que ocurría en `queueCreate` (aún sin dispatcher).
+  - La cadena DSP se **reconstruye por pista** (`FiltersChain.create`) leyendo `volume` de `_lastFiltersCache.volume`; la ganancia inicial depende de ese caché, no de llamadas tempranas.
+  - `VolumeTransformer.setVolume` **no tiene guarda de igualdad** (sonda: dos `setVolume(70)` → dos `onUpdate`, `_volume` 0.7), así que reaplicar es idempotente.
+  - `queue.node.volume` devuelve **`100`** cuando no hay transformer (sonda), por lo que no sirve como fuente de verdad del nivel deseado.
+  - **Hallazgo extra:** con `disableReverb: true` (default) la cadena **igual instancia** un `ReverbTransformer` (el preset solo se arma si `ops.reverb` existe) con `wetLevel 0.3 / dryLevel 0.7`; sonda: `FiltersChain(volume 100)` → 16000 se convierte en 11200. Queda documentado como pendiente de decisión, **sin tocar**.
+- `src/player/controls.ts`: nuevos `applyInitialVolume(queue, targetVolume = 70): number` (clamp 0-100, `WeakMap` de nivel deseado, escribe en nodo **y** en `dispatcher.dsp.volume`, `traceEvent('audio','volume_applied', …)`), `getDesiredVolume(queue, fallback = 70)` y `reapplyVolumeWhenPlaying(queue, targetVolume)` (reaplica al pasar a `playing`, sin duplicar listeners vía `WeakSet`). `setQueueVolume` delega en `applyInitialVolume`.
+- `src/events/ready.ts`: `queueCreate` → `applyInitialVolume(queue, 70)` (registra el nivel; el nodo sigue siendo no-op). `playerStart` → `enableAudioPreset(queue)` + `applyInitialVolume(queue, getDesiredVolume(queue, queue.node?.volume || 70))` + `reapplyVolumeWhenPlaying(queue, targetVolume)`.
+- `src/player/audioPreset.ts`: `COMPRESSOR_PRESET` recalibrado a `threshold: -18, ratio: 4, attack: 10, release: 150, makeupGain: 0, kneeWidth: 6`.
+- Tests: `tests/player/controlsQueue.test.ts` (ganancia aplicada aunque `queue.node.volume` ya reporte 70, escritura en el transformer cuando el nodo la ignora, clamp 140/-5/NaN, memoria de `/volume`, listener único de `reapplyVolumeWhenPlaying` y no-op si ya reproduce) y `tests/player/audioPreset.test.ts` (preset nuevo). Total **124/124**.
+- Docs sincronizadas: `AGENTS.md` (árbol, `/volume`, compresor, gotchas 7 y 8) y `docs/ARCHITECTURE.md` (sección «Ganancia real del stream» + compresor).
+- Verificación: `npm run typecheck` ✅, `npm test` ✅ **124/124**, `npm run build` ✅. Cambios locales sin commit.
+
+### 25. Perfil DSP anti-pumping + reverb 100 % seca (OpenCode, 15-nov-2026)
+- **Objetivo del Product Owner:** al 100 % de volumen el sub-bajo aplastaba medios/agudos (compresor demasiado agresivo) y la cadena DSP seguía coloreando el audio con una reverb no solicitada.
+- **Inspección en `node_modules` (discord-player 7.2.0 + `@discord-player/equalizer` 7.2.0):**
+  - `queue.filters.reverb` → `queue.dispatcher?.reverb || null` (`ReverbTransformer | null`); el dispatcher lo expone como `this.dsp?.reverb`.
+  - Firma real: `setReverb(options: Partial<ReverbParameters>): ReverbParameters` → **síncrono** (`ReverbParameters = { roomSize, damping, wetLevel, dryLevel }`). No muta propiedades privadas: cada `set*` interno llama a `onUpdate`, el dispatcher emite `reverb` y `GuildQueue` sincroniza `_lastFiltersCache.reverb`.
+  - `ReverbTransformer.processSample` = `input * dryLevel + wet * wetLevel / numDelayLines` ⇒ con `wetLevel: 0` y `dryLevel: 1` la señal sale idéntica a la entrada (se recupera el ~30 % de ganancia seca que restaba el preset `0.3 / 0.7`).
+  - Tras aplicar el preset, las pistas siguientes heredan `_lastFiltersCache.reverb` con `disabled: queue.options.disableReverb` (= `true`), así que el transformador ya no se instala: la cadena queda seca de forma permanente.
+- `src/player/audioPreset.ts`: `COMPRESSOR_PRESET` recalibrado a `threshold: -15, ratio: 3, attack: 25, release: 150, makeupGain: 0, kneeWidth: 6` (attack lento para no bombear con graves fuertes) + nuevo `DRY_REVERB_PRESET = { wetLevel: 0, dryLevel: 1 }`. `enableAudioPreset` aplica ambos en el mismo bloque `try/catch` seguro, omitiendo la reverb si el getter es `null` y devolviendo `true` si aplicó al menos un preset; un fallo de reverb conserva el compresor ya aplicado y se registra con `logRow` (badge `PRESET`).
+- Sin tocar zonas congeladas: `play.ts`, `youtubeDlpMix.ts`, registro de extractores, `nodeOptions` y `ffmpeg.setFilters` intactos (la reverb se neutraliza por la API pública, no por el filtro ffmpeg).
+- Tests `tests/player/audioPreset.test.ts`: valores exactos de `COMPRESSOR_PRESET` (`-15 / 3 / 25 / 150 / 0 / 6`) y de `DRY_REVERB_PRESET`, aplicación de ambos presets, `reverb: null` sin fallar, reverb sola cuando no hay compresor, ausencia de `setFilters`/escritura en `_lastFiltersCache`, y fallo de `setReverb` sin lanzar. Total **130/130**.
+- Docs sincronizadas: `AGENTS.md` (árbol, flujo «Perfil DSP», gotcha 8 reescrito) y `docs/ARCHITECTURE.md` (tabla, árbol y sección «Perfil DSP nativo»).
+- Verificación: `npm run typecheck` ✅, `npm test` ✅ **130/130**, `npm run build` ✅. Cambios locales sin commit.
+
+### 26. Embed estético unificado para la cola (Copilot, 15-nov-2026)
+- `src/player/queueSummary.ts`: el listado separa el encabezado de la primera canción y añade la duración al final de cada línea cuando existe. Nuevo `buildQueueEmbed(current, tracks)` para la descripción compartida, color `0x5865f2`, título `📋 Cola de reproducción`, miniatura HTTP(S) de la pista actual y pie con el conteo singular/plural de canciones en espera.
+- `src/player/panel/panel-buttons.ts`: `panel_queue` responde con el embed compartido, sin texto plano, sin parseo de menciones y conserva `flags: 64`.
+- `src/commands/music/queue.ts`: `/queue` usa el mismo builder y conserva su respuesta pública, sin `flags`.
+- Tests de `queueSummary`, `panelButtons` y `queueCommand` verifican formato/duración, color, título, miniatura, pie, menciones y privacidad. Total actualizado: **133/133**.
+- `docs/ARCHITECTURE.md` sincronizada. No cambió la definición (`data`) de `/queue`, así que no hace falta volver a desplegar comandos. Zonas congeladas intactas; pendientes de código del bloque 26: ninguno.
+- Verificación: `npm run typecheck` ✅, `npm test` ✅ **133/133**, `npm run build` ✅. Actualizó Copilot; cambios locales sin commit.
+
 ## Pendientes / próximos pasos
 
 1. **QA visual real** de la TUI en PowerShell con el bot vivo (`npm run dev`). Preview estático ya validado con `tsx`.
-2. **QA manual en Discord:** banner/logs, trazas `CMD`/`BOTÓN`, botones 🔁/🔀, `/clear`, `/remove`, `/skipto`, `/help`, pausa durante buffering, autodesconexión a los 5 min y ausencia de warnings `ephemeral`. Validar los mini-embeds públicos de confirmación (visibles para el canal) —en especial que `/play` informe las canciones **en espera** (`0/1 canción`, `N canciones`) y no cuente la pista en curso— frente a los rechazos efímeros, además del panel MatchBox (GIF del autor al reproducir y su ausencia en pausa, mención del solicitante, footer de estado, etiquetas de botones y cuenta regresiva `<t:…:R>` al pausar/reanudar) y el cierre «📭 Cola finalizada». Opcional: fijar un disco/vinilo girando con `PANEL_DISC_GIF_URL`.
+2. **QA manual en Discord:** banner/logs, trazas `CMD`/`BOTÓN`, botones 🔁/🔀, `/clear`, `/remove`, `/skipto`, `/help`, pausa durante buffering, autodesconexión a los 5 min y ausencia de warnings `ephemeral`. **QA de audio (bloques 23-25):** confirmar en la TUI `SESIÓN … Preset: activo`, que el compresor no corta el stream (~2 s de silencio/`write EPIPE`), que los picos ya no saturan, que los graves fuertes **no bombean** con el perfil `-15 dBFS / 3:1 / attack 25 ms`, que la señal suena **100 % seca** (sin cola de reverb) y que `/play` suena a 70% **desde el primer segundo** (sin tener que ejecutar `/volume 70`) con `logs/live-trace.jsonl` registrando `volume_applied` con `granted: 70` y `transformerActive: true`. Validar los mini-embeds públicos de confirmación (visibles para el canal) —en especial que `/play` informe las canciones **en espera** (`0/1 canción`, `N canciones`) y no cuente la pista en curso— frente a los rechazos efímeros, además del panel MatchBox (GIF del autor al reproducir y su ausencia en pausa, mención del solicitante, footer de estado, etiquetas de botones y cuenta regresiva `<t:…:R>` al pausar/reanudar) y el cierre «📭 Cola finalizada». Opcional: fijar un disco/vinilo girando con `PANEL_DISC_GIF_URL`.
 3. **QA de apagado:** con el bot reproduciendo, probar `Ctrl + C` (SIGINT), cerrar la ventana de consola en Windows (SIGBREAK) y `SIGTERM` en Docker: debe registrar `STOP`, detener la música, dejar el panel en «📭 Cola finalizada» y salir en menos de ~3 s.
 4. **Arquitectura pendiente:** panel dinámico con throttle/coalescing, TUI avanzada (`log-update`/chalk), web dashboard.
+5. **Audio (resuelto en el bloque 25):** la reverb por defecto ya se neutraliza con `queue.filters.reverb.setReverb({ wetLevel: 0, dryLevel: 1 })`. Pendiente solo de QA auditivo: confirmar que el audio suena más abierto/definido y que el compresor recalibrado (`-15 / 3 / 25`) no bombea en temas con graves fuertes.
 
 ## Archivos clave
 
@@ -221,7 +274,7 @@ cd30a8c feat: comandos de gestión de cola clear, remove y skipto
 
 ## Restricciones y gotchas (leer antes de tocar reproducción)
 
-1. **Reproducción congelada:** no cambiar en `src/commands/music/play.ts` los valores de `searchEngine`, `signal`, `volume: 70` ni el resto de `nodeOptions` sin pedido explícito. Tampoco `src/player/extractors/youtubeDlpMix.ts` ni el registro/orden de extractores en `src/index.ts`.
+1. **Reproducción congelada:** no cambiar en `src/commands/music/play.ts` los valores de `searchEngine`, `signal`, `volume: 70`, `disableCompressor: false` ni el resto de `nodeOptions` sin pedido explícito. Tampoco `src/player/extractors/youtubeDlpMix.ts` ni el registro/orden de extractores en `src/index.ts`.
 2. **NO usar `queue.filters.ffmpeg.setFilters(...)`**: el stream del extractor es PCM `$fmt: 'raw'`; el FFmpegFilterer lanza otro ffmpeg → `write EPIPE` y se vacía la cola. Además `setFilters` dispara `triggerReplay()`.
 3. **`agent: { autoCookiesFromBrowser: false }` SIEMPRE** al registrar YouTubeDlpExtractor.
 4. **`leaveOn*` actual:** `leaveOnEmpty`/`leaveOnEnd` en `true` con cooldown de 300000 ms; `leaveOnStop` en `false` (`/stop` desconecta explícitamente).

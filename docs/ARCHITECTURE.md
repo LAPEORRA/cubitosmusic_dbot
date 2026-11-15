@@ -26,7 +26,7 @@
 | `/loop`, `/shuffle`, `/nowplaying`, `/queue`, `/volume` | ✅ |
 | `/clear`, `/remove`, `/skipto` (gestión de colas largas) | ✅ |
 | Panel interactivo con botones (⏮ ⏸ ⏭ ⏹ 📋 + 🔁 🔀) | ✅ |
-| Anti-saturación de audio (volumen 70%, sin filtros ffmpeg) | ✅ |
+| Anti-saturación de audio (volumen 70%, compresor PCM nativo, reverb seca, sin filtros ffmpeg) | ✅ |
 | GitHub Pages (terms + privacy) | ✅ |
 
 ---
@@ -136,7 +136,7 @@ npm run deploy-commands    # Registra los slash commands en la guild (REST)
 │   │   ├── controls.ts           — Utilidades de control y validación del canal de voz
 │   │   ├── queueSummary.ts       — Resumen compartido entre /queue y el botón 📋
 │   │   ├── url.ts                — normalizeUrl (extraído de play.ts, con tests)
-│   │   └── audioPreset.ts        — Preset de compresor DSP por cola
+│   │   └── audioPreset.ts        — Perfil DSP nativo (`queue.filters.compressor` + `queue.filters.reverb`, presets por cola)
 │   └── types/
 │       ├── index.ts              — Tipos compartidos (MusicQueue, BotConfig)
 │       └── commands.ts           — Contrato Command / CommandContext / CommandCategory
@@ -281,9 +281,12 @@ diagnóstico. No imprime en la TUI y `logs/` está excluido de Git.
   que el bot. Consultar la cola sigue siendo de solo lectura.
 
 ### `queueSummary.ts`
-- `buildQueueSummary(current, tracks)` → formato común de `/queue` y el botón `📋`.
+- `buildQueueSummary(current, tracks)` → formato común de `/queue` y el botón `📋`,
+  con duración opcional y salto de línea antes de las pistas.
 - `buildQueueReply(current, tracks)` → muestra “cola vacía” solo si no hay pista actual
   ni canciones en espera.
+- `buildQueueEmbed(current, tracks)` → mini-embed `0x5865f2` compartido por `/queue` y
+  `📋 Cola`, con miniatura HTTP(S) de la pista actual y conteo de canciones en espera.
 - Desactiva el parseo de menciones para títulos y artistas que vienen de fuentes externas.
 
 ---
@@ -322,8 +325,54 @@ las canciones.
 ## Volumen (`src/commands/music/volume.ts`)
 
 - `/volume <porcentaje>` (entero 1–100) exige canal de voz, reproducción activa y el mismo canal que el bot.
-- `setQueueVolume(queue, volume)` en `src/player/controls.ts` valida entero 1–100 y aplica `queue.node.setVolume()`; devuelve `null` si es inválido.
+- `setQueueVolume(queue, volume)` en `src/player/controls.ts` valida entero 1–100 y delega en `applyInitialVolume(queue, volume)`; devuelve `null` si es inválido.
 - Al aplicarlo, refresca el panel activo (footer `Vol N%`) y confirma con mini-embed público; los rechazos usan `flags: 64`.
+
+---
+
+## Ganancia real del stream (`src/player/controls.ts`)
+
+**Por qué el panel podía decir 70% y sonar a tope** (inspección + sondas sobre discord-player `7.2.0`):
+
+- `queue.dispatcher.volume` es un **getter numérico**; el objeto con `setVolume` es `queue.dispatcher.dsp.volume` (`VolumeTransformer` de `@discord-player/equalizer`).
+- `GuildQueuePlayerNode.setVolume(vol)` hace `if (!this.queue.dispatcher) return false;` y `StreamDispatcher.setVolume` hace `if (!this.dsp.volume) return false;`. Es decir: **cualquier `setVolume` ejecutado antes de que existan dispatcher y cadena DSP es un no-op silencioso** (caso de `queueCreate`), y `_lastFiltersCache.volume` no se actualiza.
+- La cadena DSP se **reconstruye en cada pista** (`FiltersChain.create`), tomando `volume` de `_lastFiltersCache.volume`. Por eso el único punto fiable para fijar la ganancia es después de crear el `AudioResource`.
+- `VolumeTransformer.setVolume` **no tiene guarda de igualdad**: siempre escribe `_volume` y emite `volume` (sondas: dos llamadas con el mismo valor → dos `onUpdate`). Reaplicar es idempotente.
+- `queue.node.volume` devuelve `100` mientras no haya transformer (sonda verificada), así que **no** sirve como fuente de verdad del nivel deseado.
+
+**Implementación:**
+
+- `applyInitialVolume(queue, targetVolume = 70): number` — clampa 0-100, recuerda el nivel en un `WeakMap` por cola, llama a `queue.node.setVolume()` y escribe también en `queue.dispatcher.dsp.volume.setVolume()` (try/catch: un fallo nunca corta la reproducción). Emite `traceEvent('audio', 'volume_applied', …)` para QA en `logs/live-trace.jsonl`.
+- `getDesiredVolume(queue, fallback = 70)` — nivel elegido por `/volume` (o el 70 por defecto de `/play`); evita depender de `queue.node.volume`.
+- `reapplyVolumeWhenPlaying(queue, targetVolume)` — red de seguridad si el `AudioResource` se adjunta después de `playerStart`: escucha `stateChange` del `audioPlayer` y reaplica al pasar a `playing`. Un `WeakSet` evita duplicar listeners y el listener se retira al aplicarse.
+- `ready.ts` — `queueCreate`: `applyInitialVolume(queue, 70)` (registra el nivel; el nodo aún no tiene DSP). `playerStart`: `enableAudioPreset(queue)` + `applyInitialVolume(queue, getDesiredVolume(queue, queue.node?.volume || 70))` + `reapplyVolumeWhenPlaying(...)`.
+- `setQueueVolume` delega en `applyInitialVolume`, así `/volume` toca panel y audio a la vez.
+
+
+---
+
+## Perfil DSP nativo (`src/player/audioPreset.ts`)
+
+**API real de discord-player v7.2.0** (verificada en `node_modules`):
+
+- `GuildNodeCreateOptions.disableCompressor?: boolean` — **el default efectivo es `true`**: el dispatcher solo instala el `CompressorTransformer` cuando vale `false`.
+- `queue.filters` es `GuildQueueAudioFilters`; su getter `compressor` → `queue.dispatcher?.compressor || null` (`CompressorTransformer | null`) y su getter `reverb` → `queue.dispatcher?.reverb || null` (`ReverbTransformer | null`).
+- `queue.filters.compressor.setCompressor(options: Partial<CompressorParameters>): CompressorParameters` — **síncrono**. Cada `set*` interno dispara `onUpdate`, el dispatcher emite `compressor` y `GuildQueue` sincroniza `_lastFiltersCache.compressor`, de modo que las siguientes pistas heredan los parámetros al construir su `FiltersChain`.
+- `queue.filters.reverb.setReverb(options: Partial<ReverbParameters>): ReverbParameters` — **síncrono**, misma mecánica (`onUpdate` → evento `reverb` → `_lastFiltersCache.reverb`). `ReverbParameters = { roomSize, damping, wetLevel, dryLevel }`.
+- `ReverbTransformer.processSample` calcula `output = input * dryLevel + wet * wetLevel / numDelayLines`: con `wetLevel: 0` y `dryLevel: 1` la señal sale idéntica a la entrada.
+
+**Implementación:**
+
+- `COMPRESSOR_PRESET = { threshold: -15, ratio: 3, attack: 25, release: 150, makeupGain: 0, kneeWidth: 6 }` — calibrado contra el *pumping* en masters de YouTube con graves fuertes: el attack lento (25 ms) deja pasar el transitorio del bombo sin disparar la reducción completa de ganancia, de modo que el sub-bajo no aplasta medios ni agudos al 100 % de volumen.
+- `DRY_REVERB_PRESET = { wetLevel: 0, dryLevel: 1 }` — fuerza la señal 100 % seca y recupera la ganancia seca que restaba el preset por defecto (`0.3 / 0.7`).
+- `enableAudioPreset(queue): boolean` aplica ambos presets por la vía pública y devuelve `true` si aplicó al menos uno. Devuelve `false` (sin lanzar) si no hay cola, si los getters son `null` (por ejemplo en `queueCreate`, antes de que exista el dispatcher), si falta `setCompressor`/`setReverb`, o si la llamada falla (se registra con `logRow`, badge `PRESET`, color amarillo, sin interrumpir la reproducción). La reverb se omite si su getter es `null`; un fallo de reverb no descarta el compresor ya aplicado.
+- **Nunca** usa `ffmpeg.setFilters` (rompe el stream PCM `$fmt: 'raw'` del extractor y dispara `triggerReplay()`) ni escribe `_lastFiltersCache` a mano.
+
+**Cableado:**
+
+- `src/commands/music/play.ts` → `nodeOptions.disableCompressor: false` (junto a `volume: 70`); sin él `queue.filters.compressor` siempre sería `null`.
+- `src/events/ready.ts` → `queueCreate`: `applyInitialVolume(queue, 70)` (registra el nivel y fija `queue.node.setVolume(70)`, que aquí es no-op sin dispatcher) + `enableAudioPreset(queue)`; el log `queue_created` muestra `Preset: activo` según `queue.options.disableCompressor`. `playerStart`: con `queue.dispatcher` ya activo, reafirma `enableAudioPreset(queue)` (compresor + reverb seca sobre el `AudioResource` recién creado), `applyInitialVolume(queue, getDesiredVolume(queue, queue.node?.volume || 70))` (ganancia real del stream = porcentaje del panel desde el primer segundo) y `reapplyVolumeWhenPlaying(queue, …)` como red de seguridad.
+
 
 ---
 

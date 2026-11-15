@@ -28,11 +28,15 @@ function createButtonInteraction(customId: string, deferUpdate: () => Promise<vo
 function fakeActiveQueue(): GuildQueue {
   return {
     channel: { id: 'voice-1' },
-    currentTrack: { title: 'One More Time', author: 'Daft Punk' },
+    currentTrack: {
+      title: 'One More Time',
+      author: 'Daft Punk',
+      thumbnail: 'https://example.com/cover.jpg',
+    },
     repeatMode: 0,
     node: { isPaused: () => false },
     tracks: {
-      data: [{ title: 'Around the World', author: 'Daft Punk' }],
+      data: [{ title: 'Around the World', author: 'Daft Punk', duration: '07:09' }],
       shuffle: () => {},
     },
   } as unknown as GuildQueue;
@@ -52,6 +56,14 @@ test('los botones responden con flags: 64 sin ephemeral (deprecado)', async () =
   assert.equal(followUps.length, 1);
   assert.equal(followUps[0].flags, 64);
   assert.equal('ephemeral' in followUps[0], false);
+  assert.equal(followUps[0].content, undefined);
+  assert.deepEqual(followUps[0].allowedMentions, { parse: [] });
+  const embed = followUps[0].embeds[0].data;
+  assert.equal(embed.color, 0x5865f2);
+  assert.equal(embed.title, '📋 Cola de reproducción');
+  assert.match(embed.description, /Cola \(1\):\*\*\n1\. \*\*Around the World\*\* — Daft Punk `07:09`/);
+  assert.equal(embed.thumbnail.url, 'https://example.com/cover.jpg');
+  assert.equal(embed.footer.text, '1 canción en espera');
 });
 
 test('el aviso de canal de voz tampoco usa ephemeral', async () => {
