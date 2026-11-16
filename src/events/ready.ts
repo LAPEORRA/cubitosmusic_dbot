@@ -1,9 +1,11 @@
 import { randomUUID } from 'node:crypto';
-import { ActivityType, Client } from 'discord.js';
+import { ActivityType, Client, EmbedBuilder } from 'discord.js';
 import type { GuildQueue, Player, Track } from 'discord-player';
 import { buildPanelEmbed, buildPanelRows, getPanelRowState, updatePanel, setStartedAt, getStartedAt, updateEmptyPanel, cleanupOrphanedPanels } from '../player/panel/panel.js';
 import { enableAudioPreset } from '../player/audioPreset.js';
 import { applyInitialVolume, getDesiredVolume, reapplyVolumeWhenPlaying } from '../player/controls.js';
+import { classifyPlayerError, tryFallbackYouTubeSearch } from '../player/trackFallback.js';
+import { buildCommandEmbed } from '../utils/commandEmbed.js';
 import {
   getSystemMetrics,
   logRow,
@@ -108,6 +110,39 @@ function getErrorDetails(error: unknown) {
     return { errorName: error.name, errorMessage: error.message };
   }
   return { errorMessage: String(error) };
+}
+
+type WarningMessage = { delete: () => Promise<unknown> };
+type WarningChannel = { send: (options: { embeds: EmbedBuilder[] }) => Promise<WarningMessage> };
+
+function sendTrackErrorWarning(queue: GuildQueue, track: Track | null | undefined, userMessage: string): void {
+  const metadata = queue.metadata as { channel?: unknown } | undefined;
+  const channel = metadata?.channel as Partial<WarningChannel> | undefined;
+  if (typeof channel?.send !== 'function') return;
+
+  const embed = buildCommandEmbed({
+    author: 'Pista omitida',
+    description: `⏭️ Se omitió **${track?.title ?? 'Tema desconocido'}**.\n${userMessage}`,
+    color: 0xfee75c,
+  });
+
+  void Promise.resolve()
+    .then(() => channel.send?.({ embeds: [embed] }))
+    .then((message) => {
+      if (!message) return;
+      const timer = setTimeout(() => {
+        void message.delete().catch(() => {});
+      }, 10_000);
+      timer.unref?.();
+    })
+    .catch((error: unknown) => {
+      logRow({
+        badge: 'AVISO',
+        color: 'yellow',
+        channel: queue.channel?.name,
+        detail: `No se pudo enviar aviso: ${summarizePlayerError(getErrorDetails(error).errorMessage)}`,
+      });
+    });
 }
 
 /** Refresca el panel cuando cambia la cola sin cambiar la pista actual. */
@@ -239,9 +274,13 @@ function logPlaybackEvent(
         ? getErrorDetails(details.error).errorMessage
         : String(details.error ?? details.errorMessage ?? 'Error de reproducción');
       errorText = summarizePlayerError(errorText);
-      const failedTrack = queue.currentTrack;
+      const failedTrack = (details.track as Track | undefined) ?? queue.currentTrack;
       failedTrackTitle = failedTrack?.title ?? '—';
-      detail = failedTrack ? `${failedTrack.title}: ${errorText}` : errorText;
+      detail = typeof details.userMessage === 'string'
+        ? `Track: ${details.userMessage}`
+        : failedTrack
+          ? `${failedTrack.title}: ${errorText}`
+          : errorText;
       break;
     }
     default: {
@@ -252,9 +291,10 @@ function logPlaybackEvent(
     }
   }
 
+  const errorLogText = typeof details.userMessage === 'string' ? details.userMessage : errorText;
   if (
     (event === 'player_error' || event === 'playback_error') &&
-    isDuplicateErrorLog(queue.guild.id, failedTrackTitle, errorText)
+    isDuplicateErrorLog(queue.guild.id, failedTrackTitle, errorLogText)
   ) {
     return;
   }
@@ -421,12 +461,39 @@ export const ready = async (client: Client, player: Player, guildId: string, spo
     logPlaybackEvent('player_error', queue, { error }, client);
   });
 
-  player.events.on('playerError', (queue, error, track) => {
+  player.events.on('playerError', async (queue, error, track) => {
+    const replacement = await tryFallbackYouTubeSearch(player, queue, track, error);
+
     traceEvent('error', 'player_error', {
       guildId: queue.guild.id,
       error: serializeError(error),
       ...getTraceTrackDetails(track),
     });
-    logPlaybackEvent('playback_error', queue, { error }, client);
+
+    if (replacement) {
+      traceEvent('audio', 'track_fallback', {
+        guildId: queue.guild.id,
+        failedTitle: track.title,
+        replacementTitle: replacement.title,
+      });
+      logRow({
+        badge: 'RESCATE',
+        color: 'green',
+        channel: queue.channel?.name,
+        detail: replacement.title,
+        rawJson: {
+          event: 'track_fallback',
+          failedTitle: track.title,
+          replacementTitle: replacement.title,
+        },
+      });
+      return;
+    }
+
+    const { userMessage } = classifyPlayerError(
+      error instanceof Error ? error.message : getErrorDetails(error).errorMessage,
+    );
+    logPlaybackEvent('player_error', queue, { error, track, userMessage }, client);
+    sendTrackErrorWarning(queue, track, userMessage);
   });
 };

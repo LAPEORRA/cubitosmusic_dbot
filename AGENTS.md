@@ -78,6 +78,7 @@ src/
 │   ├── controls.ts           — helpers; controles con canal compartido + volumen real del stream (`applyInitialVolume`)
 │   ├── queueSummary.ts       — Formato compartido de la cola en el comando y el panel
 │   ├── url.ts                — normalizeUrl (extraído de play.ts, con tests de tabla)
+│   ├── trackFallback.ts      — Clasificación de errores y rescate YouTube acotado por título/artista
 │   └── audioPreset.ts        — Perfil DSP nativo (`queue.filters.compressor` + `queue.filters.reverb`, presets por cola)
 └── types/
     ├── index.ts              — Tipos compartidos
@@ -94,7 +95,8 @@ scripts/deploy-commands.ts    — Registro de comandos vía REST (usa el registr
   `playback_started`, errores y fin/borrado de cola), correlacionados con
   `playbackSessionId`; incluyen secuencia observada, cola pendiente y `Carga:` por pista
   (desde `willPlayTrack` hasta `playerStart`). Los errores de yt-dlp limpian prefijos ruidosos
-  antes del truncado de la columna `DETALLES`.
+  antes del truncado de la columna `DETALLES`. Si una pista falla en `playerError`, se intenta
+  un único rescate por título/artista; si no hay reemplazo, se muestra un error clasificado.
 
 ## Flujos clave
 - **Control de reproducción**: `/pause`, `/skip`, `/stop`, `/loop`, `/shuffle`, `/volume` y los botones que modifican la reproducción solo funcionan desde el mismo canal de voz que el bot.
@@ -103,6 +105,7 @@ scripts/deploy-commands.ts    — Registro de comandos vía REST (usa el registr
 - **`/volume`**: `setQueueVolume(queue, porcentaje)` valida entero 1–100 (si no, `null`), aplica el nivel con `applyInitialVolume()` (nodo + `VolumeTransformer` real), refresca el panel activo (footer `Vol N%`) y confirma con mini-embed público. El nivel queda recordado en `getDesiredVolume()` para las siguientes pistas.
 - **`/help`**: lista el registro (`src/commands/index.ts`) agrupado por `category`; usa import dinámico de `../index.js` para evitar el ciclo ESM y responde con un mini-embed público (`buildCommandEmbed`).
 - **`/play`**: `normalizeUrl` (en `src/player/url.ts`) → elige `searchEngine` por dominio (youtube.com → ytdlp, spotify.com → spotify, soundcloud.com → soundcloud, resto auto) → `player.play(channel, query, { requestedBy, signal: AbortSignal.timeout(30_000), searchEngine, nodeOptions })`. `nodeOptions`: `metadata {channel}`, `leaveOnEmpty/leaveOnEnd: true` con `*Cooldown: 300_000` (auto-desconexión tras 5 min), `leaveOnStop: false`, `verifyFallbackStream: true`, `volume: 70` (anti-saturación) y `disableCompressor: false` (habilita el compresor PCM nativo que aplica `audioPreset.ts`). `requestedBy` va a nivel de pista, no en `metadata`.
+- **Errores y rescate (`src/player/trackFallback.ts`)**: `playerError` intenta primero una búsqueda de hasta 8 s por título y artista para YouTube o errores yt-dlp; excluye la URL fallida e inserta el primer resultado distinto en el índice 0. Un `WeakSet` y una caché normalizada acotada evitan bucles y reintentos repetidos. Si no se recupera, clasifica la causa, registra `[ERROR] Track: …` y envía al canal un mini-embed de aviso que se borra a los 10 s.
 - **Perfil DSP (`src/player/audioPreset.ts`)**: `enableAudioPreset(queue)` aplica dos presets por la API pública, ambos **síncronos** en v7.2.0:
   - `queue.filters.compressor.setCompressor(COMPRESSOR_PRESET)` → `threshold: -15`, `ratio: 3`, `attack: 25`, `release: 150`, `makeupGain: 0`, `kneeWidth: 6` (anti-clipping sin *pumping* en masters de YouTube con graves fuertes; el attack lento deja pasar el transitorio del bombo para que no aplaste medios/agudos al 100 %).
   - `queue.filters.reverb.setReverb(DRY_REVERB_PRESET)` → `wetLevel: 0`, `dryLevel: 1` (señal 100 % seca: `output = input * dryLevel + wet * wetLevel / delayLines`), solo si el getter `reverb` no es `null`.

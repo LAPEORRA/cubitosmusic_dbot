@@ -7,6 +7,7 @@ export type CommandEmbedOptions = {
   description: string;
   footer?: string;
   thumbnail?: string;
+  color?: number;
 };
 
 function isHttpUrl(value: unknown): value is string {
@@ -21,7 +22,7 @@ function isHttpUrl(value: unknown): value is string {
  */
 export function buildCommandEmbed(opts: CommandEmbedOptions): EmbedBuilder {
   const embed = new EmbedBuilder()
-    .setColor(0x5865f2)
+    .setColor(opts.color ?? 0x5865f2)
     .setDescription(opts.description);
 
   if (opts.author) embed.setAuthor({ name: opts.author });

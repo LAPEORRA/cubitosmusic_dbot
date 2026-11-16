@@ -5,7 +5,7 @@
 ## Estado actual
 
 - **Carpeta activa:** `D:\cubitosmusic` (reubicado desde `D:\Proyectos_Opencode`).
-- **Git:** rama `main`, `HEAD` en `2b007bc` (`fix(tui): mide carga por pista y limpia mensajes de error de yt-dlp`), **sincronizado con `origin/main`** al iniciar el bloque 30. Se preservaron los cambios locales preexistentes de los bloques 28–29; este bloque añade cambios locales de arranque/pruebas/documentación. Sin commits.
+- **Git:** rama `main`, `HEAD` en `b447bdd` (`feat(tui): banner ASCII multicolor y cabecera Larga Vida a Cubitos al arrancar`), **sincronizado con `origin/main`** al iniciar el cierre del bloque 28. Los seis archivos locales de `trackFallback` se cierran en este bloque; tras el commit y push, el árbol queda limpio.
 - **Base previa:** `2291c3e` (`feat(panel): reemplaza la barra ASCII por duración y cuenta regresiva nativa`).
 - **Remoto:** `https://github.com/LAPEORRA/cubitosmusic_dbot.git` (`origin/main`).
 

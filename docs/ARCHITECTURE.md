@@ -136,6 +136,7 @@ npm run deploy-commands    # Registra los slash commands en la guild (REST)
 │   │   ├── controls.ts           — Utilidades de control y validación del canal de voz
 │   │   ├── queueSummary.ts       — Resumen compartido entre /queue y el botón 📋
 │   │   ├── url.ts                — normalizeUrl (extraído de play.ts, con tests)
+│   │   ├── trackFallback.ts      — Clasificación de errores y rescate YouTube acotado por título/artista
 │   │   └── audioPreset.ts        — Perfil DSP nativo (`queue.filters.compressor` + `queue.filters.reverb`, presets por cola)
 │   └── types/
 │       ├── index.ts              — Tipos compartidos (MusicQueue, BotConfig)
@@ -224,6 +225,11 @@ await player.extractors.register(YouTubeDlpMixExtractor, {
 - **`emptyQueue`**: log; vuelve el panel a estado "Cola vacía" (botones deshabilitados) y libera la referencia del panel.
 - **`queueDelete`**: log + `updateEmptyPanel` (cubre la autodesconexión por `leaveOnEmpty`/`leaveOnEnd`) y limpieza de los Maps por guild.
 - **`error` / `playerError`**: log JSON de error con la pista activa y el tamaño de cola; no rompe el bot.
+- En `playerError`, `tryFallbackYouTubeSearch` intenta una búsqueda de hasta 8 s por título y artista
+  para pistas de YouTube o errores yt-dlp. Omite la URL fallida, marca el reemplazo para impedir
+  bucles e inserta el primer resultado distinto al frente (`queue.insertTrack(track, 0)`). Si no
+  hay reemplazo, `classifyPlayerError` convierte la causa en un mensaje en español y se envía un
+  mini-embed amarillo al canal de texto; el aviso se borra a los 10 s.
 - Los mensajes de error de yt-dlp se resumen para quitar prefijos repetidos (`yt-dlp exited`, `ERROR:`, `WARNING:`, `[youtube] <id>:`) antes del truncado de la TUI.
 
 Los eventos estructurados incluyen timestamp, canal y un `playbackSessionId` estable durante la vida de la cola, útil para correlacionar una sesión en la consola. No incluyen usuario ni URL completa de las pistas.
@@ -403,6 +409,8 @@ las canciones.
 ## Manejo de errores y directrices de respuestas
 
 - Las **confirmaciones exitosas** de comandos son mini-embeds públicos (`buildCommandEmbed`, color `0x5865f2`).
+- `buildCommandEmbed` permite un color opcional para avisos de reproducción; los errores de pista usan
+  `0xfee75c` e indican el tema omitido y el mensaje clasificado, sin alterar la cola si falla el aviso.
 - Los **errores y rechazos** (validación de canal de voz, posición inválida, nada reproduciéndose, etc.)
   usan `flags: 64` (ephemeral) para no llenar el canal.
 - `play.ts` distingue: `AbortError`/`Cancelled` (timeout → "tardó demasiado"),
@@ -521,6 +529,7 @@ las canciones.
 | `src/player/panel/panel-buttons.ts` | Lógica de botones |
 | `src/player/controls.ts` | Utilidades de reproducción |
 | `src/player/url.ts` | `normalizeUrl` (con tests de tabla) |
+| `src/player/trackFallback.ts` | Clasificación de errores y rescate YouTube acotado |
 | `src/types/commands.ts` | Contrato `Command` del registro |
 | `tests/` | Pruebas de regresión (`node:test`) |
 | `docs/ARCHITECTURE.md` | Este documento |
