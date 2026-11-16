@@ -49,7 +49,13 @@ Fue estabilizada tras mucho trabajo. **NO modificar:**
 - `npm start` — `node dist/index.js`
 - `npm run deploy-commands` — registro de comandos **de guild** (instantáneo). `npm run deploy-commands -- --global` para registro global (~1h)
 - `npm test` — ejecuta las pruebas de regresión con `tsx --test`
+- `docker compose config` — valida la configuración de Compose sin iniciar el bot
+- `docker compose up -d --build` — construye e inicia el contenedor en segundo plano
+- `docker compose logs -f cubitosmusic` — sigue los logs del bot
+- `docker compose down` — detiene el contenedor
+- Antes del primer arranque, crea `.env` a partir de `.env.example` y completa las variables obligatorias.
 - `package-lock.json` se versiona; usar `npm ci` para instalaciones reproducibles
+- Despliegue Docker: `docker-compose.yml` limita el contenedor a 512 MiB de RAM y el heap de Node a 384 MiB. La imagen instala `ffmpeg` y `yt-dlp` del sistema; `FFMPEG_BIN=/usr/bin/ffmpeg` evita que `ffmpeg-static` seleccione un binario descargado en postinstall, mientras que el extractor encuentra `yt-dlp` mediante `PATH`.
 
 ## Entorno (`.env`)
 - Obligatorias (el bot aborta si faltan): `DISCORD_TOKEN`, `CLIENT_ID`, `GUILD_ID`
@@ -58,6 +64,9 @@ Fue estabilizada tras mucho trabajo. **NO modificar:**
 
 ## Arquitectura (real)
 ```
+Dockerfile
+docker-compose.yml
+.dockerignore
 src/
 ├── index.ts                  — Bootstrap: Client, Player, credenciales Spotify, registro de extractores, login
 ├── config.ts                 — Validación tipada del entorno (BotConfig); aborta si falta algo obligatorio

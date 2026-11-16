@@ -5,7 +5,7 @@
 ## Estado actual
 
 - **Carpeta activa:** `D:\cubitosmusic` (reubicado desde `D:\Proyectos_Opencode`).
-- **Git:** rama `main`, `HEAD` en `b447bdd` (`feat(tui): banner ASCII multicolor y cabecera Larga Vida a Cubitos al arrancar`), **sincronizado con `origin/main`** al iniciar el cierre del bloque 28. Los seis archivos locales de `trackFallback` se cierran en este bloque; tras el commit y push, el árbol queda limpio.
+- **Git:** rama `main`, `HEAD` en `05d2e81`, sincronizado con `origin/main` y árbol limpio antes de iniciar el bloque 31. Los cambios de Docker/documentación del bloque 31 están locales, sin commit ni push.
 - **Base previa:** `2291c3e` (`feat(panel): reemplaza la barra ASCII por duración y cuenta regresiva nativa`).
 - **Remoto:** `https://github.com/LAPEORRA/cubitosmusic_dbot.git` (`origin/main`).
 
@@ -289,6 +289,14 @@ cd30a8c feat: comandos de gestión de cola clear, remove y skipto
 - Verificación: `npm run typecheck` ✅, `npm test` ✅ **141/141**, `npm run build` ✅; prueba focalizada de logger ✅ **16/16**; `npm config get loglevel` → `silent`.
 - Actualizó Copilot. Sin commit ni push. Pendiente confirmar el arranque visual completo con el bot conectado.
 
+### 31. Empaquetado Docker Alpine para 24/7 (Copilot, 16-nov-2026)
+- Nuevos `.dockerignore`, `Dockerfile` multi-stage sobre `node:22-alpine` y `docker-compose.yml`: dependencias instaladas con scripts omitidos, runtime con `ffmpeg`/`yt-dlp`/Python del sistema, límite de memoria (512 MiB) y heap de Node (384 MiB), reinicio automático, apagado con gracia, persistencia de `logs/` y rotación de logs Docker.
+- Se fija `FFMPEG_BIN=/usr/bin/ffmpeg` en la imagen: `discord-player-youtubedlp` prioriza `ffmpeg-static`, cuyo paquete acepta esa variable para seleccionar el ejecutable nativo. `yt-dlp` busca primero el binario del sistema en `PATH`. No hay referencias directas a `ffmpeg-static`, `ytdlp-nodejs`, `setFFmpegPath` ni `setYtDlpPath` en `src/`; no se tocaron las zonas congeladas.
+- `.env.example` documenta variables obligatorias vacías y variables opcionales comentadas (`SPOTIFY_CLIENT_ID`, `SPOTIFY_CLIENT_SECRET`, `PANEL_DISC_GIF_URL`, `LIVE_TRACE`, `LOG_TO_FILE`).
+- `AGENTS.md` actualizado con archivos de Docker, comandos de Compose y selección de binarios del sistema. `.github/copilot-instructions.md` sigue apuntando a `AGENTS.md` y `HANDOFF.md`.
+- Verificación: `npm run typecheck` ✅, `npm test` ✅ **141/141**, `npm run build` ✅, `git diff --check` ✅. `docker compose config` no ejecutado: Docker no está instalado en este equipo.
+- **Commit base del bloque:** `05d2e81`; empaquetado listo para el commit autorizado. Actualizó Copilot. Pendiente validar `docker compose config` y el arranque en el host Linux de despliegue.
+
 ## Pendientes / próximos pasos
 
 1. **QA visual real** de la TUI en PowerShell con el bot vivo (`npm run dev`), incluido el mensaje «Larga Vida a Cubitos», ausencia de banners de npm/dotenv y el banner ASCII.
@@ -296,6 +304,7 @@ cd30a8c feat: comandos de gestión de cola clear, remove y skipto
 3. **QA de apagado:** con el bot reproduciendo, probar `Ctrl + C` (SIGINT), cerrar la ventana de consola en Windows (SIGBREAK) y `SIGTERM` en Docker: debe registrar `STOP`, detener la música, dejar el panel en «📭 Cola finalizada» y salir en menos de ~3 s.
 4. **Arquitectura pendiente:** panel dinámico con throttle/coalescing, TUI avanzada (`log-update`/chalk), web dashboard.
 5. **Audio (resuelto en el bloque 25):** la reverb por defecto ya se neutraliza con `queue.filters.reverb.setReverb({ wetLevel: 0, dryLevel: 1 })`. Pendiente solo de QA auditivo: confirmar que el audio suena más abierto/definido y que el compresor recalibrado (`-15 / 3 / 25`) no bombea en temas con graves fuertes.
+6. **Docker (bloque 31):** en el host Linux de despliegue, validar `docker compose config` e iniciar el contenedor para confirmar los binarios Alpine, el montaje de `logs/` y el apagado ordenado.
 
 ## Archivos clave
 

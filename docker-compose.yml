@@ -1,0 +1,16 @@
+services:
+  cubitosmusic:
+    build: .
+    container_name: cubitosmusic
+    restart: unless-stopped
+    stop_grace_period: 10s
+    env_file: .env
+    volumes:
+      - ./logs:/app/logs
+    mem_limit: 512m
+    memswap_limit: 1g
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
