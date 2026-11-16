@@ -7,7 +7,7 @@ import { test } from 'node:test';
 import type { Client } from 'discord.js';
 import { ActivityType } from 'discord.js';
 import type { GuildQueue, Player, Track } from 'discord-player';
-import { logTracksQueued, ready } from '../../src/events/ready.js';
+import { createTrackLoadTimer, logTracksQueued, ready } from '../../src/events/ready.js';
 
 const stripAnsi = (text: string) => text.replace(/\u001b\[[0-9;]*m/g, '');
 
@@ -40,6 +40,23 @@ function fakeTrack(title: string, playlist: { title: string; source?: string } |
     playlist,
   } as unknown as Track;
 }
+
+test('mide y consume la carga desde el inicio de cada pista', () => {
+  let now = 0;
+  const timer = createTrackLoadTimer(() => now);
+  const firstTrack = fakeTrack('Pista 1');
+  const secondTrack = fakeTrack('Pista 2');
+
+  timer.start(firstTrack);
+  now = 1_800;
+  assert.equal(timer.consume(firstTrack), 1_800);
+
+  now = 8_000;
+  timer.start(secondTrack);
+  now = 9_750;
+  assert.equal(timer.consume(secondTrack), 1_750);
+  assert.equal(timer.consume(secondTrack), undefined, 'la duración se consume una sola vez');
+});
 
 test('tracks_queued muestra el título del álbum cuando la playlist existe', () => {
   const tracks = [
@@ -115,7 +132,7 @@ test('deduplica errores de TUI por 2 segundos y filtra debug [NW] sin perder tra
     await ready(client, player, 'guild-error-dedup-test');
     lines.length = 0;
 
-    const firstError = new Error('HTTP Error 403');
+    const firstError = new Error('yt-dlp exited code=1 WARNING: [youtube] xyz: Video unavailable');
     events.emit('error', queue, firstError);
     now += 1;
     events.emit('error', queue, firstError);
@@ -129,9 +146,10 @@ test('deduplica errores de TUI por 2 segundos y filtra debug [NW] sin perder tra
 
     const errorRows = lines.map(stripAnsi).filter((line) => line.includes('[ERROR]'));
     assert.equal(errorRows.length, 3);
-    assert.match(errorRows[0], /HTTP Error 403/);
+    assert.match(errorRows[0], /Video unavailable/);
+    assert.doesNotMatch(errorRows[0], /yt-dlp|WARNING:|\[youtube\]/);
     assert.match(errorRows[1], /fallo distinto/);
-    assert.match(errorRows[2], /HTTP Error 403/);
+    assert.match(errorRows[2], /Video unavailable/);
 
     const tracePath = join(directory, 'logs', 'live-trace.jsonl');
     assert.equal(existsSync(tracePath), true);

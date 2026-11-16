@@ -1,16 +1,18 @@
 # Handoff — CubitoMusic
 
-> Documento de traspaso de sesión: estado del proyecto al **15-nov-2026** para retomar en una sesión fresca.
+> Documento de traspaso de sesión: estado del proyecto al **16-nov-2026** para retomar en una sesión fresca.
 
 ## Estado actual
 
 - **Carpeta activa:** `D:\cubitosmusic` (reubicado desde `D:\Proyectos_Opencode`).
-- **Git:** rama `main`, `HEAD` en `30d06b1` (`fix(play): cuenta solo canciones en espera en la confirmación de /play`), **sincronizado con `origin/main`**, con cambios locales sin commit de los bloques 23 (compresor PCM nativo), 24 (ganancia real al iniciar pista + calibración del compresor), 25 (perfil DSP anti-pumping + reverb seca) y 26 (embed unificado de cola). Los bloques 19–22 ya están publicados (`105f720`, `27eec90`, `836bde4`, `30d06b1`).
+- **Git:** rama `main`, `HEAD` en `637ff21` (`feat(queue): unifica el embed de /queue y el panel`), **sincronizado con `origin/main`** al iniciar este bloque. Los bloques 23–25 (audio) y 26 (cola) están publicados en `f695fdd` y `637ff21`; los bloques 19–22 también (`105f720`, `27eec90`, `836bde4`, `30d06b1`).
 - **Base previa:** `2291c3e` (`feat(panel): reemplaza la barra ASCII por duración y cuenta regresiva nativa`).
 - **Remoto:** `https://github.com/LAPEORRA/cubitosmusic_dbot.git` (`origin/main`).
 
 ### Últimos commits
 ```
+637ff21 feat(queue): unifica el embed de /queue y el panel
+f695fdd feat(audio): compresor PCM anti-pumping, reverb seca y ganancia real al iniciar
 30d06b1 fix(play): cuenta solo canciones en espera en la confirmación de /play
 836bde4 feat(commands): añade /volume y refresca el panel activo
 105f720 feat(shutdown): apagado ordenado ante Ctrl+C y cierre de consola
@@ -34,7 +36,7 @@ cd30a8c feat: comandos de gestión de cola clear, remove y skipto
 ## Verificación (todo en verde al cerrar)
 
 1. `npm run typecheck` → ✅ 0 errores (src + tests + scripts)
-2. `npm test` → ✅ **133/133 pass, 0 fail** (telemetría, panel, presencia, P0, `/help`, mini-embeds públicos, apagado ordenado, persistencia del panel, `/volume`, compresor PCM nativo calibrado, reverb seca, ganancia real del stream y embed unificado de cola)
+2. `npm test` → ✅ **135/135 pass, 0 fail** (incluye medición de carga por pista y limpieza de errores yt-dlp)
 3. `npm run build` → ✅ OK (tsc → `dist/`)
 
 > `deploy-commands` ejecutado: **13 comandos** registrados en el guild, incluidos `/help` y `/volume`. Solo re-desplegar si cambia la definición (`data`) de algún comando.
@@ -253,12 +255,19 @@ cd30a8c feat: comandos de gestión de cola clear, remove y skipto
 - `src/commands/music/queue.ts`: `/queue` usa el mismo builder y conserva su respuesta pública, sin `flags`.
 - Tests de `queueSummary`, `panelButtons` y `queueCommand` verifican formato/duración, color, título, miniatura, pie, menciones y privacidad. Total actualizado: **133/133**.
 - `docs/ARCHITECTURE.md` sincronizada. No cambió la definición (`data`) de `/queue`, así que no hace falta volver a desplegar comandos. Zonas congeladas intactas; pendientes de código del bloque 26: ninguno.
-- Verificación: `npm run typecheck` ✅, `npm test` ✅ **133/133**, `npm run build` ✅. Actualizó Copilot; cambios locales sin commit.
+- Verificación: `npm run typecheck` ✅, `npm test` ✅ **133/133**, `npm run build` ✅. Actualizó Copilot; bloques 23–26 publicados en `f695fdd` y `637ff21`.
+
+### 27. Carga por pista y errores yt-dlp legibles (Copilot, 16-nov-2026)
+- `src/events/ready.ts`: registra el inicio de preparación en `willPlayTrack` con un `WeakMap` por objeto pista, consume y elimina la marca en `playerStart`, y reporta `Carga:` como tiempo de preparación individual, sin acumular desde el encolado o la sesión.
+- `src/utils/logger.ts`: nuevo `summarizePlayerError(rawMessage)` quita prefijos repetidos de yt-dlp/YouTube, colapsa líneas y deja la causa antes del truncado de `DETALLES`; la telemetría JSON conserva el error original.
+- Tests en `tests/events/ready.test.ts` y `tests/utils/logger.test.ts`: verifican tiempos separados y consumidos para pistas consecutivas, la salida de `[ERROR]` limpia y el resumen del ejemplo de yt-dlp.
+- `AGENTS.md` y `docs/ARCHITECTURE.md` actualizados. Zonas congeladas respetadas (`play.ts`, `youtubeDlpMix.ts`, `index.ts` y filtros ffmpeg intactos).
+- Verificación: `npm run typecheck` ✅, `npm test` ✅ **135/135**, `npm run build` ✅. Actualizó Copilot; cierre Git solicitado por el PO con `fix(tui): mide carga por pista y limpia mensajes de error de yt-dlp`. Pendiente solo QA manual de TUI/error y duración de carga en marcha blanca.
 
 ## Pendientes / próximos pasos
 
 1. **QA visual real** de la TUI en PowerShell con el bot vivo (`npm run dev`). Preview estático ya validado con `tsx`.
-2. **QA manual en Discord:** banner/logs, trazas `CMD`/`BOTÓN`, botones 🔁/🔀, `/clear`, `/remove`, `/skipto`, `/help`, pausa durante buffering, autodesconexión a los 5 min y ausencia de warnings `ephemeral`. **QA de audio (bloques 23-25):** confirmar en la TUI `SESIÓN … Preset: activo`, que el compresor no corta el stream (~2 s de silencio/`write EPIPE`), que los picos ya no saturan, que los graves fuertes **no bombean** con el perfil `-15 dBFS / 3:1 / attack 25 ms`, que la señal suena **100 % seca** (sin cola de reverb) y que `/play` suena a 70% **desde el primer segundo** (sin tener que ejecutar `/volume 70`) con `logs/live-trace.jsonl` registrando `volume_applied` con `granted: 70` y `transformerActive: true`. Validar los mini-embeds públicos de confirmación (visibles para el canal) —en especial que `/play` informe las canciones **en espera** (`0/1 canción`, `N canciones`) y no cuente la pista en curso— frente a los rechazos efímeros, además del panel MatchBox (GIF del autor al reproducir y su ausencia en pausa, mención del solicitante, footer de estado, etiquetas de botones y cuenta regresiva `<t:…:R>` al pausar/reanudar) y el cierre «📭 Cola finalizada». Opcional: fijar un disco/vinilo girando con `PANEL_DISC_GIF_URL`.
+2. **QA manual en Discord:** banner/logs, trazas `CMD`/`BOTÓN`, botones 🔁/🔀, `/clear`, `/remove`, `/skipto`, `/help`, pausa durante buffering, autodesconexión a los 5 min y ausencia de warnings `ephemeral`. En la TUI, confirmar que `Carga:` refleja el tiempo de preparación individual en pistas sucesivas y que `[ERROR]` muestra causas de yt-dlp sin prefijos ruidosos. **QA de audio (bloques 23-25):** confirmar en la TUI `SESIÓN … Preset: activo`, que el compresor no corta el stream (~2 s de silencio/`write EPIPE`), que los picos ya no saturan, que los graves fuertes **no bombean** con el perfil `-15 dBFS / 3:1 / attack 25 ms`, que la señal suena **100 % seca** (sin cola de reverb) y que `/play` suena a 70% **desde el primer segundo** (sin tener que ejecutar `/volume 70`) con `logs/live-trace.jsonl` registrando `volume_applied` con `granted: 70` y `transformerActive: true`. Validar los mini-embeds públicos de confirmación (visibles para el canal) —en especial que `/play` informe las canciones **en espera** (`0/1 canción`, `N canciones`) y no cuente la pista en curso— frente a los rechazos efímeros, además del panel MatchBox (GIF del autor al reproducir y su ausencia en pausa, mención del solicitante, footer de estado, etiquetas de botones y cuenta regresiva `<t:…:R>` al pausar/reanudar) y el cierre «📭 Cola finalizada». Opcional: fijar un disco/vinilo girando con `PANEL_DISC_GIF_URL`.
 3. **QA de apagado:** con el bot reproduciendo, probar `Ctrl + C` (SIGINT), cerrar la ventana de consola en Windows (SIGBREAK) y `SIGTERM` en Docker: debe registrar `STOP`, detener la música, dejar el panel en «📭 Cola finalizada» y salir en menos de ~3 s.
 4. **Arquitectura pendiente:** panel dinámico con throttle/coalescing, TUI avanzada (`log-update`/chalk), web dashboard.
 5. **Audio (resuelto en el bloque 25):** la reverb por defecto ya se neutraliza con `queue.filters.reverb.setReverb({ wetLevel: 0, dryLevel: 1 })`. Pendiente solo de QA auditivo: confirmar que el audio suena más abierto/definido y que el compresor recalibrado (`-15 / 3 / 25`) no bombea en temas con graves fuertes.

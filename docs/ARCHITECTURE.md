@@ -219,11 +219,12 @@ await player.extractors.register(YouTubeDlpMixExtractor, {
 ## Flujo de eventos de reproducción (`src/events/ready.ts`)
 
 - **`queueCreate` / `audioTrackAdd` / `audioTracksAdd`**: emite logs JSON de creación de cola y pistas/listas añadidas; para listas incluye cantidad y una muestra del orden recibido.
-- **`playerStart`**: emite un log JSON con pista, posición, tamaño pendiente y tiempo desde que se encoló; actualiza el panel (embed + botones) en el canal donde se pidió la música.
+- **`willPlayTrack` / `playerStart`**: mide `Carga:` por pista desde el inicio de preparación (`willPlayTrack`) hasta el arranque, consume la marca al iniciar y emite el log JSON con pista/posición; actualiza el panel (embed + botones) en el canal donde se pidió la música.
 - **`playerPause` / `playerResume`**: re-render del panel con estado de pausa.
 - **`emptyQueue`**: log; vuelve el panel a estado "Cola vacía" (botones deshabilitados) y libera la referencia del panel.
 - **`queueDelete`**: log + `updateEmptyPanel` (cubre la autodesconexión por `leaveOnEmpty`/`leaveOnEnd`) y limpieza de los Maps por guild.
 - **`error` / `playerError`**: log JSON de error con la pista activa y el tamaño de cola; no rompe el bot.
+- Los mensajes de error de yt-dlp se resumen para quitar prefijos repetidos (`yt-dlp exited`, `ERROR:`, `WARNING:`, `[youtube] <id>:`) antes del truncado de la TUI.
 
 Los eventos estructurados incluyen timestamp, canal y un `playbackSessionId` estable durante la vida de la cola, útil para correlacionar una sesión en la consola. No incluyen usuario ni URL completa de las pistas.
 

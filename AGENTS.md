@@ -92,7 +92,9 @@ scripts/deploy-commands.ts    — Registro de comandos vía REST (usa el registr
 
 - Logs de reproducción en consola: JSON por evento (`queue_created`, `tracks_queued`,
   `playback_started`, errores y fin/borrado de cola), correlacionados con
-  `playbackSessionId`; incluyen secuencia observada, cola pendiente y tiempo desde que se encoló cada pista.
+  `playbackSessionId`; incluyen secuencia observada, cola pendiente y `Carga:` por pista
+  (desde `willPlayTrack` hasta `playerStart`). Los errores de yt-dlp limpian prefijos ruidosos
+  antes del truncado de la columna `DETALLES`.
 
 ## Flujos clave
 - **Control de reproducción**: `/pause`, `/skip`, `/stop`, `/loop`, `/shuffle`, `/volume` y los botones que modifican la reproducción solo funcionan desde el mismo canal de voz que el bot.

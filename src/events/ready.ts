@@ -9,15 +9,32 @@ import {
   logRow,
   printStartupBanner,
   serializeError,
+  summarizePlayerError,
   traceEvent,
   type LogColor,
 } from '../utils/logger.js';
 
 const playbackSessionIds = new WeakMap<GuildQueue, string>();
-const queuedAtByTrack = new WeakMap<Track, number>();
 const tracedDispatchers = new WeakSet<object>();
 const ERROR_LOG_DEDUP_WINDOW_MS = 2_000;
 const recentErrorLogSignatures = new Map<string, number>();
+
+export function createTrackLoadTimer(now: () => number = () => performance.now()) {
+  const startedAtByTrack = new WeakMap<Track, number>();
+
+  return {
+    start(track: Track): void {
+      startedAtByTrack.set(track, now());
+    },
+    consume(track: Track): number | undefined {
+      const startedAt = startedAtByTrack.get(track);
+      startedAtByTrack.delete(track);
+      return startedAt === undefined ? undefined : now() - startedAt;
+    },
+  };
+}
+
+const trackLoadTimer = createTrackLoadTimer();
 
 function isDuplicateErrorLog(guildId: string, trackTitle: string, errorText: string): boolean {
   const now = Date.now();
@@ -106,7 +123,6 @@ function refreshQueuePanel(queue: GuildQueue): void {
 
 export function logTracksQueued(queue: GuildQueue, tracks: Track[]) {
   const preview = tracks.slice(0, 5).map((track) => track.title);
-  for (const track of tracks) queuedAtByTrack.set(track, performance.now());
 
   // Resumen ligero: el switch necesita títulos/playlist, pero no queremos el Track
   // completo en `rawJson` (objetos grandes y con referencias internas).
@@ -183,9 +199,9 @@ function logPlaybackEvent(
       badge = '▶ PLAY';
       color = 'green';
       detail = `${track?.title ?? '—'} (${track?.duration ?? 'n/a'})`;
-      const queuedForMs = typeof details.queuedForMs === 'number' ? details.queuedForMs : 0;
+      const cargaMs = typeof details.cargaMs === 'number' ? details.cargaMs : 0;
       const sequence = queue.history.tracks.size + 1;
-      metricsText = `Carga: ${(queuedForMs / 1000).toFixed(1)}s • #${sequence} • ${getSystemMetrics(client)}`;
+      metricsText = `Carga: ${(cargaMs / 1000).toFixed(1)}s • #${sequence} • ${getSystemMetrics(client)}`;
       break;
     }
     case 'player_pause': {
@@ -222,6 +238,7 @@ function logPlaybackEvent(
       errorText = typeof details.error === 'object' && details.error !== null
         ? getErrorDetails(details.error).errorMessage
         : String(details.error ?? details.errorMessage ?? 'Error de reproducción');
+      errorText = summarizePlayerError(errorText);
       const failedTrack = queue.currentTrack;
       failedTrackTitle = failedTrack?.title ?? '—';
       detail = failedTrack ? `${failedTrack.title}: ${errorText}` : errorText;
@@ -303,6 +320,9 @@ export const ready = async (client: Client, player: Player, guildId: string, spo
   player.events.on('disconnect', (queue) => {
     traceEvent('voice', 'disconnected', { guildId: queue.guild.id });
   });
+  player.events.on('willPlayTrack', (_queue, track) => {
+    trackLoadTimer.start(track);
+  });
 
   player.events.on('audioTrackAdd', (queue, track) => {
     logTracksQueued(queue, [track]);
@@ -316,15 +336,14 @@ export const ready = async (client: Client, player: Player, guildId: string, spo
 
   // Registrar eventos del player
   player.events.on('playerStart', (queue, track) => {
-    const queuedAt = queuedAtByTrack.get(track);
-    queuedAtByTrack.delete(track);
+    const cargaMs = trackLoadTimer.consume(track) ?? 0;
     traceEvent('audio', 'track_started', {
       guildId: queue.guild.id,
       ...getTraceTrackDetails(track),
     });
     logPlaybackEvent('playback_started', queue, {
       ...getTrackDetails(track),
-      queuedForMs: queuedAt === undefined ? 0 : Math.round(performance.now() - queuedAt),
+      cargaMs: Math.round(cargaMs),
     }, client);
 
     client.user?.setActivity(track.title, { type: ActivityType.Listening });

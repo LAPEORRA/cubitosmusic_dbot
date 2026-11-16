@@ -210,6 +210,29 @@ function singleLine(text: string): string {
   return String(text).replace(/\s+/g, ' ').trim();
 }
 
+export function summarizePlayerError(rawMessage: string): string {
+  const lines = rawMessage
+    .split(/\r?\n/)
+    .map((line) => {
+      let summary = line.trim();
+      let previous: string;
+
+      do {
+        previous = summary;
+        summary = summary
+          .replace(/^yt-dlp exited code=\d+:?\s*/i, '')
+          .replace(/^(?:ERROR|WARNING):\s*/i, '')
+          .replace(/^\[youtube\]\s+[^:\s]+:\s*/i, '')
+          .trim();
+      } while (summary !== previous);
+
+      return summary;
+    })
+    .filter(Boolean);
+
+  return lines.length > 0 ? singleLine(lines.join(' ')) : singleLine(rawMessage);
+}
+
 /** Imprime una fila de la tabla de logs con columnas alineadas y color por columna. */
 export function logRow(opts: LogRowOptions): void {
   const time = formatLogTime();

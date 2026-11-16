@@ -12,6 +12,7 @@ import {
   paint,
   printStartupBanner,
   serializeError,
+  summarizePlayerError,
   traceEvent,
   type LogColor,
 } from '../../src/utils/logger.js';
@@ -149,6 +150,17 @@ test('logRow aplana saltos de línea y tabulaciones en una sola fila', () => {
   assert.match(plain, /#musica #2/);
   assert.match(plain, /yt-dlp WARNING: fallo segunda línea/);
   assert.match(plain, /RAM 84MB fallback/);
+});
+
+test('summarizePlayerError elimina prefijos de yt-dlp y colapsa líneas', () => {
+  assert.equal(
+    summarizePlayerError('yt-dlp exited code=1 WARNING: [youtube] xyz: Video unavailable'),
+    'Video unavailable',
+  );
+  assert.equal(
+    summarizePlayerError('ERROR: [youtube] abc_123: Sign in to confirm your age\nWARNING: detalle'),
+    'Sign in to confirm your age detalle',
+  );
 });
 
 test('printStartupBanner mantiene el borde derecho alineado con la línea superior', () => {
