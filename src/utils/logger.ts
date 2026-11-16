@@ -94,9 +94,39 @@ export function paint(color: LogColor, text: string): string {
   return `${codes[color]}${text}${ANSI_COLORS.reset}`;
 }
 
+export const STARTUP_BOOT_LINES = [
+  [
+    'Calibrando condensadores y purificando el 30% del aire...',
+    'Acoplando turbinas PCM en modo 100% seco. Listo para despegar.',
+  ],
+  [
+    'Sincronizando condensadores de flujo y alineando los bits en fase...',
+    'Reactor de audio estabilizado a 48 kHz. Sin fugas ni Protocolos 830.',
+  ],
+  [
+    'Negociando tratados de paz internacionales y domesticando weones...',
+    'Extractores cargados y escudo anti-clipping activado.',
+  ],
+] as const;
+
+export function printBootHeader(random: () => number = Math.random): void {
+  const [firstLine, secondLine] = STARTUP_BOOT_LINES[
+    Math.floor(random() * STARTUP_BOOT_LINES.length)
+  ];
+
+  console.log(paint('cyan', `${ANSI_COLORS.bold}⚡ Larga Vida a Cubitos.`));
+  console.log(paint('gray', `   ↳ ${firstLine}`));
+  console.log(paint('gray', `   ↳ ${secondLine}`));
+}
+
+function visibleLength(text: string): number {
+  return text.replace(/\u001b\[[0-9;]*m/g, '').length;
+}
+
 function pad(text: string, width: number): string {
   const value = String(text);
-  return value.length >= width ? value : value + ' '.repeat(width - value.length);
+  const length = visibleLength(value);
+  return length >= width ? value : value + ' '.repeat(width - length);
 }
 
 /** Ajusta el texto exactamente a `width`: rellena con espacios o trunca con `…`. */
@@ -163,13 +193,27 @@ export function printStartupBanner(info: StartupBannerInfo): void {
     console.log('');
   }
 
+  const logo = [
+    '   ______      __    _ __            __  ___           _',
+    '  / ____/_  __/ /_  (_) /_____  ____/  |/  /_  _______(_)____',
+    ' / /   / / / / __ \\/ / __/ __ \\/ ___/ /|_/ / / / / ___/ / ___/',
+    '/ /___/ /_/ / /_/ / / /_/ /_/ (__  ) /  / / /_/ (__  ) / /__',
+    '\\____/\\__,_/_.___/_/\\__/\\____/____/_/  /_/\\__,_/____/_/\\___/',
+  ];
+  for (const line of logo) {
+    console.log(
+      `${paint('cyan', `${ANSI_COLORS.bold}${line.slice(0, 35)}`)}${paint('magenta', `${ANSI_COLORS.bold}${line.slice(35)}`)}`,
+    );
+  }
+  console.log(paint('gray', '                           desarrollado por Cubitos Dev • v1.1.0'));
+
   const pingText = info.client?.ws?.ping !== undefined && info.client.ws.ping >= 0
     ? `${Math.round(info.client.ws.ping)}ms`
     : 'calculando...';
   const ramMb = Math.round((process.memoryUsage().rss / 1024 / 1024) * 10) / 10;
 
   const lines = [
-    'CUBITOS MUSIC v1.1.0',
+    `${paint('cyan', `${ANSI_COLORS.bold}Cubitos`)} ${paint('magenta', `${ANSI_COLORS.bold}Music`)} v1.1.0`,
     `Bot: ${info.botTag}`,
     `Servidor: ${info.guildName}`,
     `Node: ${process.version}`,
@@ -178,7 +222,7 @@ export function printStartupBanner(info: StartupBannerInfo): void {
   ].map((text) => truncate(text, 60));
 
   // Ancho dinámico: el recuadro se ajusta al contenido (mínimo 44) y así el borde derecho queda alineado.
-  const textWidth = lines.reduce((max, text) => Math.max(max, text.length), 44);
+  const textWidth = lines.reduce((max, text) => Math.max(max, visibleLength(text)), 44);
   const boxInner = textWidth + 2;
   const boxLine = '─'.repeat(boxInner);
   const row = (text: string) => `│ ${pad(text, textWidth)} │`;

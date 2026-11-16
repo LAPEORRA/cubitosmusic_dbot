@@ -5,12 +5,13 @@
 ## Estado actual
 
 - **Carpeta activa:** `D:\cubitosmusic` (reubicado desde `D:\Proyectos_Opencode`).
-- **Git:** rama `main`, `HEAD` en `637ff21` (`feat(queue): unifica el embed de /queue y el panel`), **sincronizado con `origin/main`** al iniciar este bloque. Los bloques 23–25 (audio) y 26 (cola) están publicados en `f695fdd` y `637ff21`; los bloques 19–22 también (`105f720`, `27eec90`, `836bde4`, `30d06b1`).
+- **Git:** rama `main`, `HEAD` en `2b007bc` (`fix(tui): mide carga por pista y limpia mensajes de error de yt-dlp`), **sincronizado con `origin/main`** al iniciar el bloque 30. Se preservaron los cambios locales preexistentes de los bloques 28–29; este bloque añade cambios locales de arranque/pruebas/documentación. Sin commits.
 - **Base previa:** `2291c3e` (`feat(panel): reemplaza la barra ASCII por duración y cuenta regresiva nativa`).
 - **Remoto:** `https://github.com/LAPEORRA/cubitosmusic_dbot.git` (`origin/main`).
 
 ### Últimos commits
 ```
+2b007bc fix(tui): mide carga por pista y limpia mensajes de error de yt-dlp
 637ff21 feat(queue): unifica el embed de /queue y el panel
 f695fdd feat(audio): compresor PCM anti-pumping, reverb seca y ganancia real al iniciar
 30d06b1 fix(play): cuenta solo canciones en espera en la confirmación de /play
@@ -36,7 +37,7 @@ cd30a8c feat: comandos de gestión de cola clear, remove y skipto
 ## Verificación (todo en verde al cerrar)
 
 1. `npm run typecheck` → ✅ 0 errores (src + tests + scripts)
-2. `npm test` → ✅ **135/135 pass, 0 fail** (incluye medición de carga por pista y limpieza de errores yt-dlp)
+2. `npm test` → ✅ **141/141 pass, 0 fail** (incluye cabecera de arranque, banner ASCII multicolor y telemetría)
 3. `npm run build` → ✅ OK (tsc → `dist/`)
 
 > `deploy-commands` ejecutado: **13 comandos** registrados en el guild, incluidos `/help` y `/volume`. Solo re-desplegar si cambia la definición (`data`) de algún comando.
@@ -264,9 +265,33 @@ cd30a8c feat: comandos de gestión de cola clear, remove y skipto
 - `AGENTS.md` y `docs/ARCHITECTURE.md` actualizados. Zonas congeladas respetadas (`play.ts`, `youtubeDlpMix.ts`, `index.ts` y filtros ffmpeg intactos).
 - Verificación: `npm run typecheck` ✅, `npm test` ✅ **135/135**, `npm run build` ✅. Actualizó Copilot; cierre Git solicitado por el PO con `fix(tui): mide carga por pista y limpia mensajes de error de yt-dlp`. Pendiente solo QA manual de TUI/error y duración de carga en marcha blanca.
 
+### 28. Clasificación de errores y rescate de pista (Copilot, 16-nov-2026)
+- `src/player/trackFallback.ts`: `classifyPlayerError` asigna mensajes en español a causas comunes de yt-dlp/extractores. `tryFallbackYouTubeSearch` intenta una búsqueda por título/artista con límite de 8 s, omite la URL fallida e inserta el primer resultado distinto al frente de la cola.
+- Anti-bucle: `WeakSet` de pistas ya rescatadas/intentadas y caché FIFO normalizada limitada a 256 claves; no reintenta una pista rescatada ni una URL que siga en la ventana de deduplicación.
+- `src/events/ready.ts`: en `playerError` intenta primero el rescate; si lo logra, registra `[RESCATE]` y `track_fallback` sin avisar en Discord. Si no, registra el mensaje clasificado y envía al canal un mini-embed amarillo que se borra a los 10 s.
+- `buildCommandEmbed` acepta un color opcional, conservando el color de marca por defecto. Test nuevo `tests/player/trackFallback.test.ts` cubre clasificación, URL distinta, inserción en índice 0, anti-bucle, elegibilidad y aviso al fallar la búsqueda.
+- `AGENTS.md` y `docs/ARCHITECTURE.md` sincronizados. Zona congelada intacta (`play.ts`, `youtubeDlpMix.ts`, registro de extractores en `index.ts`); no se usa `ffmpeg.setFilters`.
+- Verificación al cierre: `npm run typecheck` ✅, `npm test` ✅ **140/140**, `npm run build` ✅, `git diff --check` ✅. No se modificó `.github/copilot-instructions.md`, que sigue apuntando a `AGENTS.md` y `HANDOFF.md`.
+- Actualizó Copilot. Pendiente QA manual de reproducción/error en un canal privado de Discord. Rama `main` sin commit nuevo; cambio local listo para revisión.
+
+### 29. Banner ASCII multicolor de arranque (Copilot, 16-nov-2026)
+- `src/utils/logger.ts`: nuevo `visibleLength(text)` elimina códigos ANSI; `pad()` y el cálculo de ancho del recuadro lo usan para mantener alineados los bordes Unicode con texto coloreado.
+- `printStartupBanner`: añade el arte ASCII de cinco líneas, con «Cubitos» en cyan + bold, «Music» en magenta + bold y la firma «desarrollado por Cubitos Dev • v1.1.0» en gray. El título del recuadro también usa ambos colores; los datos dinámicos (`Bot`, `Servidor`, `Node`, `Spotify`, `Ping • RAM • Extractores`) y el encabezado de la tabla (`HORA`, `EVENTO`, `CANAL`, `DETALLES`, `MÉTRICAS`) se conservan.
+- `tests/utils/logger.test.ts`: comprueba el arte y la firma, los colores ANSI, la alineación del recuadro y toda la telemetría/encabezado.
+- Verificación: `npm run typecheck` ✅, `npm test` ✅ **140/140**, `npm run build` ✅; prueba focalizada de logger ✅ **15/15**. No se tocaron zonas congeladas.
+- Actualizó Copilot. Sin commit ni push. Pendiente QA visual de terminal real con el bot en marcha.
+
+### 30. Cabecera «Larga Vida a Cubitos» y arranque silencioso (Copilot, 16-nov-2026)
+- `.npmrc`: fija `loglevel=silent`; `npm config get loglevel` confirma `silent`, para suprimir el encabezado/ruido de `npm run dev`.
+- `src/index.ts`: reemplaza el import lateral `dotenv/config` por `dotenv.config({ quiet: true })` y llama a `printBootHeader()` inmediatamente después, antes de validar configuración o conectar el cliente. El registro y orden de extractores queda intacto.
+- `src/utils/logger.ts`: exporta `STARTUP_BOOT_LINES` con las tres parejas técnico-cómicas y `printBootHeader(random = Math.random)`, que muestra «⚡ Larga Vida a Cubitos.» en cyan + bold y las dos sublíneas en gray.
+- `tests/utils/logger.test.ts`: comprueba el mensaje, los colores y ambas sublíneas con selección determinista mediante `random` inyectado.
+- Verificación: `npm run typecheck` ✅, `npm test` ✅ **141/141**, `npm run build` ✅; prueba focalizada de logger ✅ **16/16**; `npm config get loglevel` → `silent`.
+- Actualizó Copilot. Sin commit ni push. Pendiente confirmar el arranque visual completo con el bot conectado.
+
 ## Pendientes / próximos pasos
 
-1. **QA visual real** de la TUI en PowerShell con el bot vivo (`npm run dev`). Preview estático ya validado con `tsx`.
+1. **QA visual real** de la TUI en PowerShell con el bot vivo (`npm run dev`), incluido el mensaje «Larga Vida a Cubitos», ausencia de banners de npm/dotenv y el banner ASCII.
 2. **QA manual en Discord:** banner/logs, trazas `CMD`/`BOTÓN`, botones 🔁/🔀, `/clear`, `/remove`, `/skipto`, `/help`, pausa durante buffering, autodesconexión a los 5 min y ausencia de warnings `ephemeral`. En la TUI, confirmar que `Carga:` refleja el tiempo de preparación individual en pistas sucesivas y que `[ERROR]` muestra causas de yt-dlp sin prefijos ruidosos. **QA de audio (bloques 23-25):** confirmar en la TUI `SESIÓN … Preset: activo`, que el compresor no corta el stream (~2 s de silencio/`write EPIPE`), que los picos ya no saturan, que los graves fuertes **no bombean** con el perfil `-15 dBFS / 3:1 / attack 25 ms`, que la señal suena **100 % seca** (sin cola de reverb) y que `/play` suena a 70% **desde el primer segundo** (sin tener que ejecutar `/volume 70`) con `logs/live-trace.jsonl` registrando `volume_applied` con `granted: 70` y `transformerActive: true`. Validar los mini-embeds públicos de confirmación (visibles para el canal) —en especial que `/play` informe las canciones **en espera** (`0/1 canción`, `N canciones`) y no cuente la pista en curso— frente a los rechazos efímeros, además del panel MatchBox (GIF del autor al reproducir y su ausencia en pausa, mención del solicitante, footer de estado, etiquetas de botones y cuenta regresiva `<t:…:R>` al pausar/reanudar) y el cierre «📭 Cola finalizada». Opcional: fijar un disco/vinilo girando con `PANEL_DISC_GIF_URL`.
 3. **QA de apagado:** con el bot reproduciendo, probar `Ctrl + C` (SIGINT), cerrar la ventana de consola en Windows (SIGBREAK) y `SIGTERM` en Docker: debe registrar `STOP`, detener la música, dejar el panel en «📭 Cola finalizada» y salir en menos de ~3 s.
 4. **Arquitectura pendiente:** panel dinámico con throttle/coalescing, TUI avanzada (`log-update`/chalk), web dashboard.

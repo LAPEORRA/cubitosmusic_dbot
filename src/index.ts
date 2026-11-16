@@ -1,4 +1,4 @@
-import 'dotenv/config';
+import dotenv from 'dotenv';
 import { Client, Events, GatewayIntentBits } from 'discord.js';
 import { Player } from 'discord-player';
 import { DefaultExtractors } from '@discord-player/extractor';
@@ -6,7 +6,11 @@ import { YouTubeDlpMixExtractor } from './player/extractors/youtubeDlpMix.js';
 import { ready } from './events/ready.js';
 import { interactionCreate } from './events/interactionCreate.js';
 import { loadConfigOrExit } from './config.js';
+import { printBootHeader } from './utils/logger.js';
 import { registerGracefulShutdown } from './utils/shutdown.js';
+
+dotenv.config({ quiet: true });
+printBootHeader();
 
 const config = loadConfigOrExit();
 

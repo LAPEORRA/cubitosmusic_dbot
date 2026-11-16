@@ -6,10 +6,12 @@ import { test } from 'node:test';
 import type { Client } from 'discord.js';
 import {
   ANSI_COLORS,
+  STARTUP_BOOT_LINES,
   formatLogTime,
   getSystemMetrics,
   logRow,
   paint,
+  printBootHeader,
   printStartupBanner,
   serializeError,
   summarizePlayerError,
@@ -68,6 +70,19 @@ test('paint aplica el código de color ANSI con reset al final', () => {
   const colored = paint('red', 'ERROR');
   assert.ok(colored.includes('\u001b[31m'));
   assert.ok(colored.endsWith('\u001b[0m'));
+});
+
+test('printBootHeader imprime el mensaje principal y una pareja determinista', () => {
+  const lines = captureLogs(() => printBootHeader(() => 0.5));
+
+  assert.equal(lines.length, 3);
+  assert.equal(stripAnsi(lines[0]), '⚡ Larga Vida a Cubitos.');
+  assert.equal(stripAnsi(lines[1]), `   ↳ ${STARTUP_BOOT_LINES[1][0]}`);
+  assert.equal(stripAnsi(lines[2]), `   ↳ ${STARTUP_BOOT_LINES[1][1]}`);
+  assert.ok(lines[0].includes(ANSI_COLORS.cyan));
+  assert.ok(lines[0].includes(ANSI_COLORS.bold));
+  assert.ok(lines[1].includes(ANSI_COLORS.gray));
+  assert.ok(lines[2].includes(ANSI_COLORS.gray));
 });
 
 test('formatLogTime devuelve HH:MM:SS en zona America/Santiago', () => {
@@ -163,7 +178,7 @@ test('summarizePlayerError elimina prefijos de yt-dlp y colapsa líneas', () => 
   );
 });
 
-test('printStartupBanner mantiene el borde derecho alineado con la línea superior', () => {
+test('printStartupBanner muestra el logo multicolor, conserva la telemetría y alinea el recuadro', () => {
   const lines = captureLogs(() => {
     printStartupBanner({
       botTag: 'CubitoMusic#1234',
@@ -174,9 +189,25 @@ test('printStartupBanner mantiene el borde derecho alineado con la línea superi
     });
   });
 
+  const signatureIndex = lines.findIndex((line) => stripAnsi(line).includes('Cubitos Dev'));
+  assert.ok(signatureIndex >= 0, 'no se encontró la firma Cubitos Dev');
+  assert.match(lines[0], /\u001b\[36m\u001b\[1m/);
+  assert.match(lines[0], /\u001b\[35m\u001b\[1m/);
+  assert.match(lines[signatureIndex], /\u001b\[90m/);
+
   // Localiza la caja aunque el banner emita un salto de línea inicial en TTY.
   const boxStart = lines.findIndex((line) => stripAnsi(line).startsWith('╭'));
   assert.ok(boxStart >= 0, 'no se encontró el borde superior del banner');
+  assert.ok(signatureIndex < boxStart, 'la firma debe aparecer antes del recuadro');
+
+  const logoLines = [
+    '   ______      __    _ __            __  ___           _',
+    '  / ____/_  __/ /_  (_) /_____  ____/  |/  /_  _______(_)____',
+    ' / /   / / / / __ \\/ / __/ __ \\/ ___/ /|_/ / / / / ___/ / ___/',
+    '/ /___/ /_/ / /_/ / / /_/ /_/ (__  ) /  / / /_/ (__  ) / /__',
+    '\\____/\\__,_/_.___/_/\\__/\\____/____/_/  /_/\\__,_/____/_/\\___/',
+  ];
+  assert.deepEqual(lines.slice(0, 5).map(stripAnsi), logoLines);
 
   // Borde superior + 6 filas + borde inferior.
   const boxLines = lines.slice(boxStart, boxStart + 8);
@@ -184,9 +215,20 @@ test('printStartupBanner mantiene el borde derecho alineado con la línea superi
   assert.equal(widths.size, 1, `anchos inconsistentes: ${[...widths].join(', ')}`);
   assert.ok(stripAnsi(boxLines[0]).endsWith('╮'));
   assert.ok(stripAnsi(boxLines[7]).endsWith('╯'));
+  assert.match(lines[boxStart + 1], /\u001b\[36m\u001b\[1m/);
+  assert.match(lines[boxStart + 1], /\u001b\[35m\u001b\[1m/);
+
+  const plainBox = boxLines.map(stripAnsi).join('\n');
+  assert.match(plainBox, /Cubitos Music v1\.1\.0/);
+  assert.match(plainBox, /Bot: CubitoMusic#1234/);
+  assert.match(plainBox, /Servidor: Servidor de prueba/);
+  assert.match(plainBox, new RegExp(`Node: ${process.version.replaceAll('.', '\\.')}`));
+  assert.match(plainBox, /Spotify: activado/);
+  assert.match(plainBox, /Ping: calculando\.\.\. • RAM: \d+(\.\d+)?MB • Extractores: 4/);
 
   // Separador y encabezado comparten ancho.
   assert.equal(stripAnsi(lines[boxStart + 8]).length, stripAnsi(lines[boxStart + 9]).length);
+  assert.match(stripAnsi(lines[boxStart + 9]), /HORA\s+EVENTO\s+CANAL\s+DETALLES\s+MÉTRICAS/);
 });
 
 test('ANSI_COLORS expone los códigos base', () => {
