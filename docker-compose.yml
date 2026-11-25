@@ -7,6 +7,14 @@ services:
     env_file: .env
     volumes:
       - ./logs:/app/logs
+      # Montado en lectura/escritura a propósito: yt-dlp reescribe el cookie jar
+      # al terminar y con :ro falla con "Read-only file system".
+      - ./cookies.txt:/app/cookies.txt
+      # Caché de yt-dlp (resolución de firma/nsig) persistente entre reinicios.
+      - ytdlp-cache:/app/.cache
+      # Audio precargado: se limpia al terminar/saltar/vaciar, pero el volumen
+      # evita que un archivo huérfano acabe dentro del contenedor efímero.
+      - preload-cache:/app/preload
     mem_limit: 512m
     memswap_limit: 1g
     logging:
@@ -14,3 +22,7 @@ services:
       options:
         max-size: "10m"
         max-file: "3"
+
+volumes:
+  ytdlp-cache:
+  preload-cache:

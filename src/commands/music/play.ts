@@ -8,6 +8,21 @@ import { logRow, traceEvent } from '../../utils/logger.js';
 const GENERIC_PLAY_ERROR = '❌ No se pudo cargar esa pista o playlist. Verifica el enlace o intenta con otra búsqueda.';
 
 /**
+ * Modo de bajo consumo para la e2-micro (0.25 vCPU).
+ *
+ * Desactiva los transformadores PCM que operan muestra a muestra (compresor,
+ * reverb, ecualizador y biquads). El volumen se mantiene: es un transformador
+ * nativo barato y sin él `/volume` dejaría de funcionar.
+ */
+const LOW_CPU_AUDIO = process.env.LOW_CPU_AUDIO === 'true';
+
+/**
+ * `yt-dlp` puede tardar 30-60 s en resolver una pista desde una IP de GCP
+ * cuando YouTube aplica rate-limit. 30 s abortaba `/play` a mitad de resolución.
+ */
+const PLAY_TIMEOUT_MS = 90_000;
+
+/**
  * Mensaje seguro para Discord: no reenvía `error.message` crudo de yt-dlp/extractores
  * (suelen incluir trazas largas). Conserva los avisos específicos de timeout.
  */
@@ -79,9 +94,9 @@ export async function play(interaction: any, player: Player) {
   const channel = voiceChannel as any;
 
   try {
-    // Timeout para evitar que player.play() se quede bloqueado en el AsyncQueue
-    // 30s para permitir la resolución de playlists largas
-    const signal = AbortSignal.timeout(30_000);
+    // Timeout para evitar que player.play() se quede bloqueado en el AsyncQueue.
+    // 90 s: la resolución de yt-dlp desde GCP puede superar los 30 s.
+    const signal = AbortSignal.timeout(PLAY_TIMEOUT_MS);
 
     const extractStartedAt = performance.now();
     let result;
@@ -99,7 +114,12 @@ export async function play(interaction: any, player: Player) {
           leaveOnStop: false,     // No desconectar al usar /stop (lo gestiona el comando)
           verifyFallbackStream: true,
           volume: 70, // Reducir volumen base para evitar saturación
-          disableCompressor: false, // Habilita el compresor PCM nativo (preset en audioPreset.ts)
+          // En LOW_CPU_AUDIO los transformadores PCM por muestra se apagan;
+          // el preset de audioPreset.ts tampoco se aplica en ese modo.
+          disableCompressor: LOW_CPU_AUDIO,
+          disableReverb: LOW_CPU_AUDIO,
+          disableEqualizer: LOW_CPU_AUDIO,
+          disableBiquad: LOW_CPU_AUDIO,
         },
       });
     } finally {
@@ -108,6 +128,7 @@ export async function play(interaction: any, player: Player) {
         extractMs: performance.now() - extractStartedAt,
         normalized,
         searchEngine: searchEngine ?? null,
+        lowCpuAudio: LOW_CPU_AUDIO,
         tracksReturned: result?.searchResult?.tracks.length ?? (result?.track ? 1 : 0),
       });
     }

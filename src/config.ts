@@ -9,6 +9,8 @@ export interface BotConfig {
     clientId: string;
     clientSecret: string;
   } | null;
+  /** Ruta a un cookies.txt en formato Netscape para yt-dlp (null = sin cookies). */
+  youtubeCookies: string | null;
 }
 
 export class ConfigError extends Error {
@@ -27,7 +29,8 @@ function read(env: NodeJS.ProcessEnv, key: string): string | undefined {
  * Valida el entorno y devuelve la configuración del bot.
  *
  * Obligatorias: `DISCORD_TOKEN`, `CLIENT_ID`, `GUILD_ID`.
- * Opcionales: `SPOTIFY_CLIENT_ID` + `SPOTIFY_CLIENT_SECRET` (deben venir juntas).
+ * Opcionales: `SPOTIFY_CLIENT_ID` + `SPOTIFY_CLIENT_SECRET` (deben venir juntas),
+ * y `YOUTUBE_COOKIES` (ruta a un cookies.txt de YouTube para yt-dlp).
  *
  * @throws {ConfigError} si falta alguna variable obligatoria o si Spotify está incompleto.
  */
@@ -65,6 +68,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): BotConfig {
     clientId: clientId!,
     guildId: guildId!,
     spotify,
+    youtubeCookies: read(env, 'YOUTUBE_COOKIES') ?? null,
   };
 }
 

@@ -3,6 +3,7 @@ import { ActivityType, Client, EmbedBuilder } from 'discord.js';
 import type { GuildQueue, Player, Track } from 'discord-player';
 import { buildPanelEmbed, buildPanelRows, getPanelRowState, updatePanel, setStartedAt, getStartedAt, updateEmptyPanel, cleanupOrphanedPanels } from '../player/panel/panel.js';
 import { enableAudioPreset } from '../player/audioPreset.js';
+import { dropPreload, forgetGuild, syncPreload } from '../player/preload.js';
 import { applyInitialVolume, getDesiredVolume, reapplyVolumeWhenPlaying } from '../player/controls.js';
 import { classifyPlayerError, tryFallbackYouTubeSearch } from '../player/trackFallback.js';
 import { buildCommandEmbed } from '../utils/commandEmbed.js';
@@ -351,28 +352,45 @@ export const ready = async (client: Client, player: Player, guildId: string, spo
     traceEvent('debug', 'queue_debug', { guildId: queue.guild.id, msg });
   });
   player.events.on('playerFinish', (queue, track) => {
+    dropPreload(track);
+    syncPreload(queue);
     traceEvent('audio', 'track_finished', {
       guildId: queue.guild.id,
       title: track.title,
       duration: track.duration,
     });
   });
+
+  // Skip manual desde /skip, botones del panel o `queue.node.skip()`.
+  player.events.on('playerSkip', (queue, track) => {
+    dropPreload(track);
+    syncPreload(queue);
+  });
   player.events.on('disconnect', (queue) => {
     traceEvent('voice', 'disconnected', { guildId: queue.guild.id });
   });
-  player.events.on('willPlayTrack', (_queue, track) => {
+  // discord-player v7.2 espera a que el listener llame a `done()`; si no,
+  // el player se queda en "Waiting for willPlayTrack event to resolve...".
+  player.events.on('willPlayTrack', (_queue, track, _config, done) => {
     trackLoadTimer.start(track);
+    done?.();
   });
 
   player.events.on('audioTrackAdd', (queue, track) => {
     logTracksQueued(queue, [track]);
     refreshQueuePanel(queue);
+    syncPreload(queue);
   });
 
   player.events.on('audioTracksAdd', (queue, tracks) => {
     logTracksQueued(queue, tracks);
     refreshQueuePanel(queue);
+    syncPreload(queue);
   });
+
+  // `/clear`, `/remove`, `/skipto`: la cola cambia sin cambiar de pista.
+  player.events.on('audioTrackRemove', (queue) => syncPreload(queue));
+  player.events.on('audioTracksRemove', (queue) => syncPreload(queue));
 
   // Registrar eventos del player
   player.events.on('playerStart', (queue, track) => {
@@ -406,6 +424,9 @@ export const ready = async (client: Client, player: Player, guildId: string, spo
     const embed = buildPanelEmbed(track, queue, getStartedAt(queue.guild.id));
     const rows = buildPanelRows(queue.node.isPaused(), queue.repeatMode, getPanelRowState(queue));
     void updatePanel(channel, embed, rows);
+
+    // Fija {actual, siguiente} y lanza la descarga de la siguiente en segundo plano.
+    syncPreload(queue);
   });
 
   player.events.on('playerPause', (queue) => {
@@ -440,6 +461,7 @@ export const ready = async (client: Client, player: Player, guildId: string, spo
 
   player.events.on('emptyQueue', (queue) => {
     client.user?.setActivity();
+    forgetGuild(queue.guild.id);
     logPlaybackEvent('queue_empty', queue, {}, client);
     const channel = (queue.metadata as any)?.channel as any;
     void updateEmptyPanel(channel);
@@ -447,6 +469,7 @@ export const ready = async (client: Client, player: Player, guildId: string, spo
 
   player.events.on('queueDelete', (queue) => {
     client.user?.setActivity();
+    forgetGuild(queue.guild.id);
     logPlaybackEvent('queue_deleted', queue, {}, client);
     const channel = (queue.metadata as any)?.channel as any;
     void updateEmptyPanel(channel);

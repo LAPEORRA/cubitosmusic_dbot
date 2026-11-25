@@ -45,3 +45,8 @@ pids/
 # SO
 .DS_Store
 Thumbs.db
+
+# Secretos y copias locales
+cookies.txt
+cookies.txt.bak
+*.bak*

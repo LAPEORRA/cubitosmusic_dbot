@@ -1,8 +1,10 @@
 import dotenv from 'dotenv';
+import { existsSync } from 'node:fs';
 import { Client, Events, GatewayIntentBits } from 'discord.js';
-import { Player } from 'discord-player';
+import { Player, onBeforeCreateStream } from 'discord-player';
 import { DefaultExtractors } from '@discord-player/extractor';
 import { YouTubeDlpMixExtractor } from './player/extractors/youtubeDlpMix.js';
+import { initPreload, openPreloaded } from './player/preload.js';
 import { ready } from './events/ready.js';
 import { interactionCreate } from './events/interactionCreate.js';
 import { loadConfigOrExit } from './config.js';
@@ -23,6 +25,11 @@ const client = new Client({
 
 const player = new Player(client as any);
 
+// Precarga: mientras suena una pista se descarga la siguiente a disco, y el hook
+// devuelve ese archivo local en vez de esperar 17-90 s al extractor de yt-dlp.
+initPreload();
+onBeforeCreateStream(async (track) => openPreloaded(track));
+
 // Configurar opciones de extractores con credenciales
 const extractorOptions: Record<string, any> = {};
 
@@ -36,9 +43,24 @@ if (config.spotify) {
 // Cargar extractores defaults primero, luego YouTube (yt-dlp) con prioridad.
 // YouTubeDlpMixExtractor extiende YouTubeDlpExtractor para que los radio mixes
 // (list=RD*) se resuelvan como playlist en vez de video único.
+
+// Cookies de YouTube: sin ellas yt-dlp recibe HTTP 403 al pedir el audio desde
+// IPs de datacenter (GCP). El extractor las pasa como `yt-dlp --cookies <file>`.
+const youtubeCookies =
+  config.youtubeCookies && existsSync(config.youtubeCookies) ? config.youtubeCookies : null;
+
+if (config.youtubeCookies && !youtubeCookies) {
+  console.warn(
+    `⚠️  YOUTUBE_COOKIES apunta a "${config.youtubeCookies}", pero el archivo no existe. Se ignora.`,
+  );
+}
+
 await player.extractors.loadMulti(DefaultExtractors, extractorOptions);
 await player.extractors.register(YouTubeDlpMixExtractor, {
-  agent: { autoCookiesFromBrowser: false },
+  agent: {
+    autoCookiesFromBrowser: false,
+    ...(youtubeCookies ? { cookiesFile: youtubeCookies } : {}),
+  },
   searchLimit: 3,
   playlistTimeoutMs: 30000,
   ytdlpTimeoutMs: 30000,

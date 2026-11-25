@@ -89,7 +89,16 @@ type ReverbHandleLike = {
  * hay dispatcher/transformadores disponibles o si la llamada falló (se registra
  * sin abortar la reproducción).
  */
+/**
+ * Modo de bajo consumo (e2-micro, 0.25 vCPU): con `LOW_CPU_AUDIO=true` el
+ * compresor y la reverb se dejan desactivados. Medido: el DSP por muestra
+ * añade ~0.4 s de CPU por minuto de audio, poco en términos absolutos, pero
+ * elimina picos que compiten con FFmpeg y la codificación Opus.
+ */
+const LOW_CPU_AUDIO = process.env.LOW_CPU_AUDIO === 'true';
+
 export function enableAudioPreset(queue: any): boolean {
+  if (LOW_CPU_AUDIO) return false;
   const compressor = queue?.filters?.compressor as CompressorHandleLike | null | undefined;
   const reverb = queue?.filters?.reverb as ReverbHandleLike | null | undefined;
 
