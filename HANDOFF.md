@@ -5,7 +5,7 @@
 ## Estado actual
 
 - **Carpeta activa:** `D:\cubitosmusic` (reubicado desde `D:\Proyectos_Opencode`).
-- **Git:** rama `main`, `HEAD` en `fb94a6f` (sincronizado con `origin/main` tras el bloque 34). Los cambios del bloque 35 (`@discordjs/opus` + `sodium-native`) se integran para probar rendimiento nativo en `e2-micro`.
+- **Git:** rama `main`, `HEAD` en `c500e97` (sincronizado con `origin/main`). Bloque 36 deja la VM GCP limpia (stand-by) y el entorno local listo para uso diario (`src/player/preload.ts` con init perezoso, sin commit ni push aún).
 - **Base previa:** `2291c3e` (`feat(panel): reemplaza la barra ASCII por duración y cuenta regresiva nativa`).
 - **Remoto:** `https://github.com/LAPEORRA/cubitosmusic_dbot.git` (`origin/main`).
 
@@ -324,6 +324,14 @@ cd30a8c feat: comandos de gestión de cola clear, remove y skipto
 - **`package.json` / `package-lock.json`:** añadidos `@discordjs/opus` y `sodium-native` (conservando `opusscript` como fallback).
 - **`Dockerfile`:** nueva etapa `prod-deps` con `python3 make g++ autoconf automake libtool` ejecutando `npm ci --omit=dev --ignore-scripts && npm rebuild @discordjs/opus sodium-native`, manteniendo la etapa `runtime` ligera.
 - Verificación: `npm run typecheck` ✅, `npm test` ✅ **144/144**, `npm run build` ✅. Actualizó Antigravity.
+
+### 36. Limpieza total de la VM GCP y puesta a punto en local (Antigravity, 25-nov-2026)
+- **VM GCP (`cubitosmusic-vm`):** contenedor, volúmenes, imágenes (6.645 GB recuperados), `~/cubitosmusic_dbot`, `~/.docker`, `~/ytcache_test`, paquetes Docker (`docker-ce`, `containerd.io`, plugins, `pigz`) y `/var/lib/docker` eliminados por completo; VM en stand-by hasta migrar a una instancia con mayor vCPU sostenida (`e2-small`/`e2-medium`).
+- **Entorno local Windows (`D:\cubitosmusic`):**
+  - `C:\Users\PEORRO\bin\yt-dlp.exe` actualizado a `2026.11.23` y verificado con `d:\cubitosmusic\cookies.txt`.
+  - `.env` local configurado con `LOW_CPU_AUDIO=false`, `PRELOAD_AUDIO=false`, `YOUTUBE_COOKIES=d:\cubitosmusic\cookies.txt` y `LIVE_TRACE=false`.
+- **`src/player/preload.ts`:** inicialización perezosa de `defaultManager` (`getDefaultManager()`) para que `PRELOAD_AUDIO=false` y `PRELOAD_DIR` en `.env` se lean **después** de `dotenv.config()` en ESM.
+- Verificación: `npm run typecheck` ✅, `npm test` ✅ **144/144**, `npm run build` ✅, arranque local (`node dist/index.js`) ✅ (`CubitosMusic#0843`, `Spotify: activado`, `Extractores: 7`). Actualizó Antigravity; sin commit ni push.
 
 ## Pendientes / próximos pasos
 

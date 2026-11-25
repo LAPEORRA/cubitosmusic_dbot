@@ -328,10 +328,13 @@ export function createPreloadManager(options: PreloadManagerOptions = {}) {
   };
 }
 
-const defaultManager = createPreloadManager();
+let defaultManager: ReturnType<typeof createPreloadManager> | null = null;
+function getDefaultManager() {
+  return (defaultManager ??= createPreloadManager());
+}
 
-export const syncPreload = defaultManager.syncPreload;
-export const dropPreload = defaultManager.dropPreload;
-export const forgetGuild = defaultManager.forgetGuild;
-export const openPreloaded = defaultManager.openPreloaded;
-export const initPreload = defaultManager.initPreload;
+export const syncPreload = (queue: GuildQueue) => getDefaultManager().syncPreload(queue);
+export const dropPreload = (track: Track | null | undefined) => getDefaultManager().dropPreload(track);
+export const forgetGuild = (guildId: string) => getDefaultManager().forgetGuild(guildId);
+export const openPreloaded = (track: Track) => getDefaultManager().openPreloaded(track);
+export const initPreload = () => getDefaultManager().initPreload();

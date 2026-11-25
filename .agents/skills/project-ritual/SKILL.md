@@ -1,58 +1,59 @@
 ---
 name: project-ritual
-description: Inicializa o mantiene el flujo ligero de desarrollo en Antigravity con AGENTS.md, HANDOFF.md, sub-agentes (research, executor, verifier) y puntero de Copilot
+description: Inicializa o mantiene un flujo ligero de desarrollo asistido por IA con AGENTS.md, HANDOFF.md, sub-agentes (research, executor, verifier) y punteros opcionales para ejecutores externos.
 ---
 
 # Skill: project-ritual
 
-Flujo estándar de desarrollo asistido por IA para Santiago, centrado en **Google Antigravity** como coordinador con acceso directo al repositorio:
-
-- **Product Owner:** Santiago. Define el objetivo, aprueba decisiones de arquitectura o cambios en Zonas Congeladas y autoriza commits/push.
-- **Coordinador / Arquitecto:** Antigravity (agente principal). Lee `AGENTS.md`, `HANDOFF.md` y el código fuente real del repositorio (sin depender de exportar ni copiar/pegar `contexto_bot.txt`). Diagnostica, diseña soluciones, protege Zonas Congeladas y delega tareas acotadas.
-- **Sub-agentes delegables (Antigravity):**
-  - `research` (solo lectura): explora código, `node_modules`, logs (ej. `live-trace.jsonl`), diffs o documentación sin saturar el contexto del coordinador.
-  - `executor` (escritura acotada): implementa cambios puntuales asignados por el coordinador, respetando `AGENTS.md` y Zonas Congeladas.
-  - `verifier` (QA): ejecuta `typecheck`, `test`, `build` y verifica que el diff final respete las Zonas Congeladas.
-- **Ejecutores externos (opcional):** OpenCode y GitHub Copilot (en VS Code o en servidor/VM). Trabajan de forma estrictamente operativa sobre el repo o con prompts atómicos del coordinador.
-
-Principio central: **el repositorio es la única fuente de verdad**, no los chats ni el copiar/pegar manual.
+Flujo estándar, agnóstico e interoperable de desarrollo asistido por IA. Funciona con cualquier stack o lenguaje y mantiene al **repositorio como única fuente de verdad**, evitando depender de historiales de chat o copiar/pegar manual.
 
 ---
 
-## Reglas de Enganche (Cadena de Mando)
+## Roles y Cadena de Mando
 
-- **Para el Coordinador (Antigravity):** Lee `AGENTS.md` y `HANDOFF.md` antes de decidir. Delega exploración pesada a `research`, cambios acotados a `executor` (cuando convenga aislar o paralelizar) y validación final a `verifier`. Si se trabaja con ejecutores externos (OpenCode/Copilot), entrega un prompt atómico o revisa sus diffs al integrarlos.
-- **Para Sub-agentes (`executor`) y Ejecutores externos (OpenCode / Copilot):** Son estrictamente operativos. No toman decisiones de arquitectura ni se adelantan al flujo. Se ciñen al alcance asignado, respetan las Zonas Congeladas en `AGENTS.md`, ejecutan los tests y reportan resultados.
+- **Product Owner (Usuario):** Define objetivos y prioridades, aprueba decisiones de arquitectura o cambios en zonas congeladas y autoriza commits/push.
+- **Antigravity — Agente principal (Orquestador, Coordinador y Auditor):** Lee `AGENTS.md`, `HANDOFF.md` y el estado real del repositorio. Su foco exclusivo es pensar, diagnosticar, diseñar la arquitectura, auditar código/logs/diffs, proteger las zonas congeladas y tomar decisiones; **nunca un solo agente piensa, planifica, escribe código y depura todo por sí mismo**: delega la ejecución operativa en brazos especializados para mantener el cerebro principal enfocado.
+- **Sub-agentes delegables (brazos de ejecución y verificación):**
+  - `research` (solo lectura): explora código, dependencias, logs o diffs largos sin saturar el contexto del coordinador.
+  - `executor` (escritura acotada): implementa cambios puntuales asignados por el coordinador, respetando `AGENTS.md` y las zonas congeladas.
+  - `verifier` (QA): ejecuta los comandos de verificación definidos en `AGENTS.md` y valida que el diff final respete las zonas congeladas.
+- **Ejecutores externos (opcional, ej. OpenCode, GitHub Copilot, CLIs):** Operan como brazos externos estrictamente operativos sobre el alcance asignado o con prompts atómicos del coordinador, siguiendo `AGENTS.md` y `HANDOFF.md` sin adelantarse a decisiones de arquitectura.
 
 ---
 
-## Modo Inicialización (Cuando se solicite en un proyecto nuevo)
+## Modo Inicialización (Proyectos nuevos o sin ritual)
 
-1. **Crear `AGENTS.md` en la raíz:** Detectar el stack real del proyecto y documentar stack, estructura de carpetas, comandos exactos de verificación (`typecheck`, `test`, `build`, etc.), sección de zonas congeladas (vacía al inicio; en un proyecto existente respetar el nombre que ya tenga) y **Checklist de Cierre**.
-2. **Crear `.github/copilot-instructions.md`:** Puntero corto que obligue a Copilot a leer `AGENTS.md` y consultar/actualizar `HANDOFF.md`.
-3. **Crear `HANDOFF.md` en la raíz:** Estado inicial con fecha, objetivo, estado de tests, último commit y pendientes.
-4. **Script de contexto (opcional):** Solo si se requiere exportar contexto para herramientas sin acceso directo al repo, añadir `npm run context` (o equivalente) e ignorar el archivo exportado en `.gitignore`.
+Usar cuando el usuario pida inicializar el flujo o "aplicar el ritual" en un proyecto.
+
+1. **Detectar el stack real:** Inspeccionar archivos raíz (`package.json`, `pyproject.toml`, `go.mod`, `Cargo.toml`, `Dockerfile`, etc.) para adaptar comandos y estructura a la realidad del proyecto.
+2. **Crear `AGENTS.md` en la raíz:** Debe documentar:
+   - Roles y principio de repositorio como fuente de verdad.
+   - Stack real y estructura de carpetas.
+   - Comandos exactos de verificación según el stack (ej. `lint`, `typecheck`, `test`, `build`).
+   - Sección de **Zonas congeladas** (vacía al inicio; si ya existe en el proyecto, respetar el encabezado existente).
+   - **Checklist de Cierre**.
+3. **Crear `HANDOFF.md` en la raíz:** Estado inicial con fecha, objetivo, estado de verificación, último commit y pendientes.
+4. **Punteros de ejecutores externos (opcional):** Si el proyecto utiliza herramientas externas (p. ej. `.github/copilot-instructions.md`), crear un puntero corto que remita a `AGENTS.md` y `HANDOFF.md`.
+5. **Exportación de contexto (opcional):** Solo si se requiere compartir contexto con herramientas sin acceso directo al repo, añadir un script de exportación e ignorar el archivo generado en `.gitignore`.
 
 ---
 
 ## Modo Ejecución y Cierre (En cada sesión)
 
 ### Antes de empezar
-1. **Reconocimiento Táctico (Git):** Ejecutar `git fetch origin` y `git status --short --branch`. Informar si la rama está adelantada, atrasada o divergente, y señalar cambios locales o conflictos que deban preservarse antes de tocar código.
-2. Leer `AGENTS.md` para recordar roles, zonas congeladas y comandos.
-3. Leer `HANDOFF.md` para recuperar el punto exacto donde quedó el trabajo.
+1. **Reconocimiento Táctico (Git):** Si es un repositorio Git, ejecutar `git fetch origin` (si existe remoto) y `git status --short --branch`. Informar si la rama está adelantada, atrasada o divergente, y señalar cambios locales o conflictos a preservar antes de editar.
+2. **Leer `AGENTS.md`:** Recuperar roles, zonas congeladas, convenciones y comandos de verificación.
+3. **Leer `HANDOFF.md`:** Recuperar el punto exacto donde quedó el trabajo y los pendientes.
 
-### Antes de responder que una tarea terminó
-1. **Ejecutar la suite completa de verificación** (`typecheck`, `test`, `build`).
-2. **Leer `HANDOFF.md`** (regla *leer antes de escribir*) y actualizarlo con: fecha, último commit, conteo de tests en verde, quién actualizó (`Antigravity` / `OpenCode` / `Copilot` / `Usuario`) y próximos pasos.
-3. **Proponer un commit atómico** siguiendo Conventional Commits (`feat:`, `fix:`, `chore:`, `docs:`).
-4. **No crear commits ni hacer push** salvo pedido explícito del usuario.
+### Antes de dar una tarea por terminada
+1. **Verificación obligatoria:** Ejecutar la suite de verificación definida en `AGENTS.md` (o delegarla a `verifier`) y confirmar que todo pase.
+2. **Actualizar `HANDOFF.md`:** Leerlo completo antes de escribir y registrar: fecha, último commit, resultado de verificación, quién actualizó (agente/sub-agente/ejecutor/usuario) y próximos pasos.
+3. **Punteros externos (si aplican):** Verificar que los archivos de puntero configurados (ej. `.github/copilot-instructions.md`) sigan apuntando a `AGENTS.md` y `HANDOFF.md`.
+4. **Commit propuesto:** Proponer un commit atómico con Conventional Commits (`feat:`, `fix:`, `chore:`, `docs:`). **No crear commits ni hacer push** salvo pedido explícito del Product Owner.
 
-### Checklist de Cierre (obligatorio)
-- [ ] `typecheck` → 0 errores.
-- [ ] `test` → todos en verde.
-- [ ] `build` → OK.
-- [ ] Zonas congeladas respetadas (ver `AGENTS.md`).
-- [ ] `HANDOFF.md` actualizado (fecha, commit, tests, autor, pendientes).
-- [ ] Commit atómico propuesto; sin commit/push sin pedido explícito.
-- [ ] `.github/copilot-instructions.md` apuntando a `AGENTS.md` y `HANDOFF.md`.
+### Checklist de Cierre
+- [ ] Comandos de verificación de `AGENTS.md` en verde.
+- [ ] Zonas congeladas respetadas.
+- [ ] `HANDOFF.md` actualizado (fecha, commit, verificación, autor, pendientes).
+- [ ] Punteros de ejecutores externos vigentes (si aplican).
+- [ ] Commit atómico propuesto; sin commit/push sin autorización explícita.
