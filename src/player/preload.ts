@@ -154,6 +154,8 @@ export function createPreloadManager(options: PreloadManagerOptions = {}) {
       '--no-keep-fragments',
       '--concurrent-fragments',
       '1',
+      '--js-runtimes',
+      'node',
       '--retries',
       '3',
       '--fragment-retries',
@@ -250,7 +252,7 @@ export function createPreloadManager(options: PreloadManagerOptions = {}) {
     desiredByGuild.set(queue.guild.id, desired);
     sweep();
 
-    if (next) enqueue(next, keyFor(next));
+    if (current && next) enqueue(next, keyFor(next));
   }
 
   /** Al terminar o saltar una pista: fuera su archivo, sin esperar a la siguiente. */

@@ -5,7 +5,7 @@
 ## Estado actual
 
 - **Carpeta activa:** `D:\cubitosmusic` (reubicado desde `D:\Proyectos_Opencode`).
-- **Git:** rama `main`, `HEAD` en `0862779` (`ahead 1` respecto a `origin/main` tras el commit de gobernanza). Los cambios de sincronización GCP + precarga del bloque 33 están locales, sin commit ni push.
+- **Git:** rama `main`, `HEAD` en `7e2f744` (sincronizado con `origin/main` tras el despliegue). Los ajustes de `yt-dlp-ejs` en `Dockerfile` y `preload.ts` del bloque 34 están locales, sin commit ni push.
 - **Base previa:** `2291c3e` (`feat(panel): reemplaza la barra ASCII por duración y cuenta regresiva nativa`).
 - **Remoto:** `https://github.com/LAPEORRA/cubitosmusic_dbot.git` (`origin/main`).
 
@@ -312,6 +312,12 @@ cd30a8c feat: comandos de gestión de cola clear, remove y skipto
 - **Precarga secuencial (`/app/preload`):** `src/player/preload.ts` (`createPreloadManager` + exports singleton) descarga como máximo **1 pista a la vez** (`chain`) solo para `{actual, siguiente}`, con limpieza inmediata en `playerFinish`/`playerSkip` (`dropPreload`), `emptyQueue`/`queueDelete` (`forgetGuild`) y `audioTrackAdd`/`audioTracksAdd`/`audioTrackRemove`/`audioTracksRemove`/`playerStart` (`syncPreload`), además de `done?.()` en `willPlayTrack` (`src/events/ready.ts`) y `onBeforeCreateStream` en `src/index.ts`.
 - **Tests:** nuevo `tests/player/preload.test.ts` (concurrencia máxima 1, limpieza en `dropPreload`/`forgetGuild`, limpieza de huérfanos en `initPreload` y `enabled=false`).
 - Verificación por sub-agente `verifier`: `npm run typecheck` ✅, `npm test` ✅ **144/144**, `npm run build` ✅. Actualizó Antigravity; sin commit ni push.
+
+### 34. Actualización de `yt-dlp` + `yt-dlp-ejs` en Alpine y ajuste de `preload.ts` (Antigravity, 25-nov-2026)
+- **Diagnóstico en vivo (`cookies.txt` + `live-trace.jsonl`):** el nuevo `cookies.txt` eliminó el bloqueo anti-bot de YouTube, pero `yt-dlp 2026.10.21` de Alpine fallaba al resolver el JS challenge (`a.addOnDisposeCallback is not a function`), dejando solo imágenes disponibles. Probado en Alpine con `yt-dlp 2026.11.23` + `yt-dlp-ejs` vía `pip`: resolvió `The New Order | 3:44` con éxito.
+- **`Dockerfile`:** sustituye el paquete `yt-dlp` de Alpine por `py3-pip` + `pip install --no-cache-dir --break-system-packages --root-user-action=ignore -U yt-dlp yt-dlp-ejs`.
+- **`src/player/preload.ts`:** añade `--js-runtimes node` en `buildArgs()` y exige `current && next` antes de encolar en `syncPreload()` para no descargar la pista 1 en paralelo cuando la cola está inactiva.
+- Verificación: `npm run typecheck` ✅, `npm test` ✅ **144/144**, `npm run build` ✅. Actualizó Antigravity; sin commit ni push.
 
 ## Pendientes / próximos pasos
 

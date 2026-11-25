@@ -11,7 +11,8 @@ RUN npm run build
 # Sin toolchain C++: el codificador Opus es opusscript (JS puro), no @discordjs/opus.
 # yt-dlp y ffmpeg vienen del sistema y se enlazan donde los paquetes npm los buscan.
 FROM node:22-alpine AS runtime
-RUN apk add --no-cache ffmpeg yt-dlp python3 ca-certificates tzdata
+RUN apk add --no-cache ffmpeg python3 py3-pip ca-certificates tzdata \
+    && pip install --no-cache-dir --break-system-packages --root-user-action=ignore -U yt-dlp yt-dlp-ejs
 
 # Envoltorio de FFmpeg: fija `-threads 1`.
 # En la e2-micro (0.25 vCPU) el decode por defecto abre 2 hilos y satura la cuota
