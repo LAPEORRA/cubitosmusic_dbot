@@ -1,10 +1,14 @@
 # AGENTS.md
 
 ## Roles y fuente de verdad
-- El repositorio es la fuente de verdad del proyecto; no dependas de chats ni de copiar/pegar manual como estado canónico.
-- **Product Owner:** Santiago define el objetivo y aprueba decisiones durante el trabajo.
-- **Arquitecto/auditor externo:** Gemini analiza contexto, diffs o logs y propone la solución mediante un prompt atómico; no ejecuta cambios locales.
-- **Ejecutores:** OpenCode y GitHub Copilot implementan el prompt explícito, siguen estas reglas, ejecutan las verificaciones y reportan resultados. No se adelantan a decisiones de arquitectura.
+- El repositorio es la fuente de verdad del proyecto; no dependas de chats ni de copiar/pegar manual (`contexto_bot.txt`) como estado canónico.
+- **Product Owner:** Santiago define el objetivo, aprueba decisiones de arquitectura o cambios en zonas congeladas y autoriza commits/push.
+- **Coordinador / Arquitecto (Antigravity):** Lee el repositorio directamente (`AGENTS.md`, `HANDOFF.md`, código y logs), diagnostica, diseña la solución, protege las zonas congeladas y coordina sub-agentes.
+- **Sub-agentes delegables (Antigravity):**
+  - `research` (solo lectura): explora código, `node_modules`, logs o diffs largos sin saturar el contexto del coordinador.
+  - `executor` (escritura acotada): implementa cambios puntuales asignados por el coordinador respetando estas reglas.
+  - `verifier` (QA): ejecuta `typecheck`, `test`, `build` y valida que el diff respete las zonas congeladas.
+- **Ejecutores externos (opcionales):** OpenCode y GitHub Copilot (en VS Code o VM) operan de forma estrictamente operativa sobre el alcance asignado, siguen estas reglas y reportan resultados sin adelantarse a decisiones de arquitectura.
 
 ## Inicio de sesión
 Antes de tocar código:
@@ -17,7 +21,7 @@ Antes de tocar código:
 - `AGENTS.md` debe documentar stack, estructura, comandos de verificación, zonas congeladas (vacías inicialmente) y Checklist de Cierre.
 - Crea `.github/copilot-instructions.md` como puntero corto a `AGENTS.md` y a la lectura/actualización de `HANDOFF.md`.
 - Crea `HANDOFF.md` con fecha, objetivo, estado de pruebas, último commit y pendientes.
-- Añade un comando `npm run context` o equivalente para exportar el contexto fuente; excluye artefactos generados y añade el archivo exportado a `.gitignore`.
+- Opcional (solo si se requiere exportar para herramientas sin acceso directo al repo): añade un comando `npm run context` o equivalente; excluye artefactos generados y añade el archivo exportado a `.gitignore`.
 
 ## Proyecto
 Bot Discord **CubitoMusic**: discord.js v14, TypeScript estricto + ESM, discord-player v7.
@@ -151,7 +155,7 @@ Antes de dar por terminado un bloque de trabajo:
    - `npm run build` → OK.
 2. **Estado vivo (`HANDOFF.md`)**
    - Leer `HANDOFF.md` antes de escribir.
-   - Actualizar con: fecha, último commit, conteo de tests en verde, quién actualizó (OpenCode/Copilot/Usuario) y pendientes.
+   - Actualizar con: fecha, último commit, conteo de tests en verde, quién actualizó (Antigravity/OpenCode/Copilot/Usuario) y pendientes.
 3. **Puntero de Copilot**
    - Verificar que `.github/copilot-instructions.md` siga apuntando a estas instrucciones y a `HANDOFF.md`.
 4. **Zonas congeladas**

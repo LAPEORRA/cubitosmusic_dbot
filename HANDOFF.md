@@ -1,11 +1,11 @@
 # Handoff — CubitoMusic
 
-> Documento de traspaso de sesión: estado del proyecto al **16-nov-2026** para retomar en una sesión fresca.
+> Documento de traspaso de sesión: estado del proyecto al **25-nov-2026** para retomar en una sesión fresca.
 
 ## Estado actual
 
 - **Carpeta activa:** `D:\cubitosmusic` (reubicado desde `D:\Proyectos_Opencode`).
-- **Git:** rama `main`, `HEAD` en `05d2e81`, sincronizado con `origin/main` y árbol limpio antes de iniciar el bloque 31. Los cambios de Docker/documentación del bloque 31 están locales, sin commit ni push.
+- **Git:** rama `main`, `HEAD` en `dafefa9`, sincronizado con `origin/main` antes del bloque 32. Los cambios de ritual/documentación del bloque 32 están locales, sin commit ni push.
 - **Base previa:** `2291c3e` (`feat(panel): reemplaza la barra ASCII por duración y cuenta regresiva nativa`).
 - **Remoto:** `https://github.com/LAPEORRA/cubitosmusic_dbot.git` (`origin/main`).
 
@@ -297,7 +297,16 @@ cd30a8c feat: comandos de gestión de cola clear, remove y skipto
 - Verificación: `npm run typecheck` ✅, `npm test` ✅ **141/141**, `npm run build` ✅, `git diff --check` ✅. `docker compose config` no ejecutado: Docker no está instalado en este equipo.
 - **Commit base del bloque:** `05d2e81`; empaquetado listo para el commit autorizado. Actualizó Copilot. Pendiente validar `docker compose config` y el arranque en el host Linux de despliegue.
 
+### 32. Migración del flujo a Antigravity y skill `project-ritual` (Antigravity, 25-nov-2026)
+- `AGENTS.md`: actualizada la sección `Roles y fuente de verdad` para establecer a **Antigravity** como Coordinador/Arquitecto directo sobre el repositorio, formalizar los sub-agentes delegables (`research`, `executor`, `verifier`), mantener a OpenCode/Copilot como ejecutores externos opcionales y marcar `npm run context` (`contexto_bot.txt`) como respaldo opcional.
+- `.agents/skills/project-ritual/SKILL.md`: creada la skill local adaptada al flujo de Antigravity (cadena de mando con sub-agentes, modo inicialización y checklist de cierre).
+- `.github/copilot-instructions.md` revisado y vigente apuntando a `AGENTS.md` y `HANDOFF.md`.
+- **Diagnóstico VM GCP (`e2-micro`):** confirmado por métricas reales medidas en la VM por el PO + OpenCode que el cuello de botella era el rate-limit de YouTube al primer byte desde IP GCP (17–94 s), no `opusscript`/DSP/`ffmpeg`. En la VM ya se aplicaron `done()` en `willPlayTrack`, `cookies.txt` (`agent.cookiesFile`), `LOW_CPU_AUDIO=true` y `ffmpeg -threads 1`, quedando en curso la precarga a `/app/preload`.
+- Verificación: `npm run typecheck` ✅, `npm test` ✅ **141/141**, `npm run build` ✅. Zonas congeladas intactas en este repo local (`play.ts`, `youtubeDlpMix.ts`, `index.ts`). Actualizó Antigravity; sin commit ni push.
+
 ## Pendientes / próximos pasos
+
+0. **Sincronizar cambios de la VM GCP (`~/cubitosmusic_dbot`) hacia `D:\cubitosmusic`:** una vez que OpenCode termine la precarga en segundo plano (`/app/preload`), traer e integrar al repo local los ajustes validados (`willPlayTrack` `done()`, `agent.cookiesFile`, `LOW_CPU_AUDIO`, `ffmpeg -threads 1` y precarga), actualizando pruebas y documentación (`AGENTS.md`, `docs/ARCHITECTURE.md`).
 
 1. **QA visual real** de la TUI en PowerShell con el bot vivo (`npm run dev`), incluido el mensaje «Larga Vida a Cubitos», ausencia de banners de npm/dotenv y el banner ASCII.
 2. **QA manual en Discord:** banner/logs, trazas `CMD`/`BOTÓN`, botones 🔁/🔀, `/clear`, `/remove`, `/skipto`, `/help`, pausa durante buffering, autodesconexión a los 5 min y ausencia de warnings `ephemeral`. En la TUI, confirmar que `Carga:` refleja el tiempo de preparación individual en pistas sucesivas y que `[ERROR]` muestra causas de yt-dlp sin prefijos ruidosos. **QA de audio (bloques 23-25):** confirmar en la TUI `SESIÓN … Preset: activo`, que el compresor no corta el stream (~2 s de silencio/`write EPIPE`), que los picos ya no saturan, que los graves fuertes **no bombean** con el perfil `-15 dBFS / 3:1 / attack 25 ms`, que la señal suena **100 % seca** (sin cola de reverb) y que `/play` suena a 70% **desde el primer segundo** (sin tener que ejecutar `/volume 70`) con `logs/live-trace.jsonl` registrando `volume_applied` con `granted: 70` y `transformerActive: true`. Validar los mini-embeds públicos de confirmación (visibles para el canal) —en especial que `/play` informe las canciones **en espera** (`0/1 canción`, `N canciones`) y no cuente la pista en curso— frente a los rechazos efímeros, además del panel MatchBox (GIF del autor al reproducir y su ausencia en pausa, mención del solicitante, footer de estado, etiquetas de botones y cuenta regresiva `<t:…:R>` al pausar/reanudar) y el cierre «📭 Cola finalizada». Opcional: fijar un disco/vinilo girando con `PANEL_DISC_GIF_URL`.
