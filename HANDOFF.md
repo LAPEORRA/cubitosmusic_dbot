@@ -5,7 +5,7 @@
 ## Estado actual
 
 - **Carpeta activa:** `D:\cubitosmusic` (reubicado desde `D:\Proyectos_Opencode`).
-- **Git:** rama `main`, `HEAD` en `7e2f744` (sincronizado con `origin/main` tras el despliegue). Los ajustes de `yt-dlp-ejs` en `Dockerfile` y `preload.ts` del bloque 34 están locales, sin commit ni push.
+- **Git:** rama `main`, `HEAD` en `fb94a6f` (sincronizado con `origin/main` tras el bloque 34). Los cambios del bloque 35 (`@discordjs/opus` + `sodium-native`) se integran para probar rendimiento nativo en `e2-micro`.
 - **Base previa:** `2291c3e` (`feat(panel): reemplaza la barra ASCII por duración y cuenta regresiva nativa`).
 - **Remoto:** `https://github.com/LAPEORRA/cubitosmusic_dbot.git` (`origin/main`).
 
@@ -318,6 +318,12 @@ cd30a8c feat: comandos de gestión de cola clear, remove y skipto
 - **`Dockerfile`:** sustituye el paquete `yt-dlp` de Alpine por `py3-pip` + `pip install --no-cache-dir --break-system-packages --root-user-action=ignore -U yt-dlp yt-dlp-ejs`.
 - **`src/player/preload.ts`:** añade `--js-runtimes node` en `buildArgs()` y exige `current && next` antes de encolar en `syncPreload()` para no descargar la pista 1 en paralelo cuando la cola está inactiva.
 - Verificación: `npm run typecheck` ✅, `npm test` ✅ **144/144**, `npm run build` ✅. Actualizó Antigravity; sin commit ni push.
+
+### 35. Addons nativos `@discordjs/opus` y `sodium-native` en Docker Alpine (Antigravity, 25-nov-2026)
+- **Contexto (`live-trace.jsonl`):** en `e2-micro` (0.25 vCPU), `AudioPlayer` avanzó `52,860 ms` de `playbackDuration` en `116,135 ms` reales (~44 ms/frame) con `missedFrames: 0`.
+- **`package.json` / `package-lock.json`:** añadidos `@discordjs/opus` y `sodium-native` (conservando `opusscript` como fallback).
+- **`Dockerfile`:** nueva etapa `prod-deps` con `python3 make g++ autoconf automake libtool` ejecutando `npm ci --omit=dev --ignore-scripts && npm rebuild @discordjs/opus sodium-native`, manteniendo la etapa `runtime` ligera.
+- Verificación: `npm run typecheck` ✅, `npm test` ✅ **144/144**, `npm run build` ✅. Actualizó Antigravity.
 
 ## Pendientes / próximos pasos
 

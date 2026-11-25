@@ -17,7 +17,8 @@
     "typecheck": "tsc --noEmit && tsc -p tsconfig.test.json",
     "clean": "node -e \"require('node:fs').rmSync('dist', { recursive: true, force: true })\"",
     "deploy-commands": "tsx scripts/deploy-commands.ts",
-    "context": "node -e \"const fs=require('node:fs');const path=require('node:path');const out='contexto_bot.txt';const files=[];function walk(dir){for(const e of fs.readdirSync(dir,{withFileTypes:true})){const p=path.join(dir,e.name);if(e.isDirectory()){if(e.name==='node_modules'||e.name==='dist'||e.name==='.git')continue;walk(p);}else if(e.isFile()){files.push(p);}}}walk('src');files.unshift(...['package.json','AGENTS.md','HANDOFF.md'].filter(f=>fs.existsSync(f)));let content='';for(const f of files){content+='=== '+f.split(path.sep).join('/')+' ===\\n'+fs.readFileSync(f,'utf8')+'\\n';}fs.writeFileSync(out,content);console.log('Generado '+out+' con '+files.length+' archivos');\""  },
+    "context": "node -e \"const fs=require('node:fs');const path=require('node:path');const out='contexto_bot.txt';const files=[];function walk(dir){for(const e of fs.readdirSync(dir,{withFileTypes:true})){const p=path.join(dir,e.name);if(e.isDirectory()){if(e.name==='node_modules'||e.name==='dist'||e.name==='.git')continue;walk(p);}else if(e.isFile()){files.push(p);}}}walk('src');files.unshift(...['package.json','AGENTS.md','HANDOFF.md'].filter(f=>fs.existsSync(f)));let content='';for(const f of files){content+='=== '+f.split(path.sep).join('/')+' ===\\n'+fs.readFileSync(f,'utf8')+'\\n';}fs.writeFileSync(out,content);console.log('Generado '+out+' con '+files.length+' archivos');\""
+  },
   "keywords": [
     "discord",
     "discord-bot",
@@ -38,13 +39,15 @@
   "homepage": "https://github.com/LAPEORRA/cubitosmusic_dbot#readme",
   "dependencies": {
     "@discord-player/extractor": "^7.2.0",
+    "@discordjs/opus": "^0.11.0",
     "@discordjs/voice": "^0.19.2",
     "discord-player": "^7.2.0",
     "discord-player-youtubedlp": "^1.2.2",
     "discord.js": "^14.27.0",
     "dotenv": "^18.0.0",
     "ffmpeg-static": "^5.3.0",
-    "opusscript": "^0.0.8"
+    "opusscript": "^0.0.8",
+    "sodium-native": "^5.2.2"
   },
   "devDependencies": {
     "tsx": "^4.23.15"
